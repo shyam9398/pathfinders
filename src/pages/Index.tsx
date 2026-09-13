@@ -22,7 +22,8 @@ import {
   Globe,
   LogIn,
   UserPlus,
-  Check
+  Check,
+  GraduationCap
 } from 'lucide-react';
 import Navbar from '@/components/Navigation/Navbar';
 import heroImage from '@/assets/hero-career-guide.jpg';
