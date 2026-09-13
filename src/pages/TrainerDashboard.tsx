@@ -31,13 +31,17 @@ import {
   Layers,
   Search,
   ExternalLink,
-  ChevronRight
+  ChevronRight,
+  ArrowLeft,
+  Share2,
+  Code
 } from 'lucide-react';
 import Navbar from '@/components/Navigation/Navbar';
 import { capacityStore } from '@/services/capacityStore';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { Course, TrainerResource, MentorshipSession, SkillGapDemand, TrainerWorkshop } from '@/types/capacityConnect';
+import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { toast } from 'sonner';
 
 export default function TrainerDashboard() {
@@ -50,37 +54,36 @@ export default function TrainerDashboard() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
 
-  // Resolve active tab from URL path or search parameter
-  type TrainerTab = 'radar' | 'sessions' | 'courses' | 'resources' | 'clinic' | 'capstones' | 'analytics';
+  // Resolve dedicated page from URL path or search parameter
+  type TrainerPage = 'overview' | 'radar' | 'sessions' | 'courses' | 'resources' | 'clinic' | 'capstones' | 'analytics';
 
-  const resolveTab = (): TrainerTab => {
+  const resolvePage = (): TrainerPage => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['radar', 'sessions', 'courses', 'resources', 'clinic', 'capstones', 'analytics'].includes(tabParam)) {
-      return tabParam as TrainerTab;
+    if (tabParam && ['overview', 'radar', 'sessions', 'courses', 'resources', 'clinic', 'capstones', 'analytics'].includes(tabParam)) {
+      return tabParam as TrainerPage;
     }
     const path = location.pathname.toLowerCase();
     if (path.includes('/courses')) return 'courses';
     if (path.includes('/library') || path.includes('/resources')) return 'resources';
     if (path.includes('/trainees') || path.includes('/sessions')) return 'sessions';
     if (path.includes('/clinic') || path.includes('/doubts')) return 'clinic';
-    if (path.includes('/capstones') || path.includes('/projects')) return 'capstones';
-    if (path.includes('/analytics') || path.includes('/certificates') || path.includes('/feedback') || path.includes('/assessments')) return 'analytics';
+    if (path.includes('/capstones') || path.includes('/reviews') || path.includes('/projects')) return 'capstones';
+    if (path.includes('/analytics') || path.includes('/feedback')) return 'analytics';
     if (path.includes('/radar')) return 'radar';
-    return 'radar';
+    return 'overview';
   };
 
-  // Navigation tabs within Trainer Dashboard
-  const [activeTab, setActiveTab] = useState<TrainerTab>(resolveTab);
+  const [currentPage, setCurrentPage] = useState<TrainerPage>(resolvePage);
 
   useEffect(() => {
-    setActiveTab(resolveTab());
+    setCurrentPage(resolvePage());
   }, [location.pathname, searchParams]);
 
-  const handleTabClick = (tab: TrainerTab) => {
-    setActiveTab(tab);
-    navigate(`/trainer/${tab === 'radar' ? '' : tab}`);
+  const handleNavigatePage = (page: TrainerPage) => {
+    setCurrentPage(page);
+    navigate(`/trainer/${page === 'overview' ? '' : page}`);
   };
 
   // Core Data Stores
@@ -106,7 +109,7 @@ export default function TrainerDashboard() {
   const [newResType, setNewResType] = useState<TrainerResource['type']>('pdf');
   const [newResDriveUrl, setNewResDriveUrl] = useState('');
 
-  // Live Student Rapid Doubt Clinic Queue (Unique student-benefiting trainer feature)
+  // Live Student Rapid Doubt Clinic Queue
   const [doubtQueue, setDoubtQueue] = useState([
     {
       id: 'd-1',
@@ -140,7 +143,7 @@ export default function TrainerDashboard() {
     }
   ]);
 
-  // Capstone & Project Submissions for review (Unique student-benefiting trainer feature)
+  // Capstone & Project Submissions for review
   const [capstoneReviews, setCapstoneReviews] = useState([
     {
       id: 'rev-1',
@@ -239,14 +242,14 @@ export default function TrainerDashboard() {
     toast.success('Course published to Trainee Catalog!');
   };
 
-  // Handle Upload Resource
-  const handleUploadResource = (e: React.FormEvent) => {
+  // Handle Publish Resource
+  const handlePublishResource = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newResTitle.trim()) return;
 
     const res: TrainerResource = {
       id: `res-${Date.now()}`,
-      trainerId: trainerId,
+      trainerId,
       title: newResTitle,
       type: newResType,
       fileUrl: newResDriveUrl.trim() || 'https://capacityconnect.edu/uploads/sample-resource.pdf',
@@ -270,16 +273,15 @@ export default function TrainerDashboard() {
     e.preventDefault();
     if (!workshopTitle.trim()) return;
 
-    const newWs = capacityStore.createWorkshop({
+    capacityStore.createWorkshop({
       trainerId,
       trainerName,
-      skillName: selectedDemand?.skillName || 'Data Structures',
+      targetSkillGap: selectedDemand?.skillName || 'Data Structures',
       title: workshopTitle,
-      scheduledAt: workshopDate,
-      durationMinutes: 60,
-      enrolledTraineesCount: 1,
-      maxCapacity: workshopMaxCapacity,
-      status: 'scheduled'
+      date: workshopDate,
+      time: '11:00 AM - 12:30 PM IST',
+      maxSeats: workshopMaxCapacity,
+      meetUrl: 'https://meet.google.com/capacity-remediation-live'
     });
 
     setWorkshops(capacityStore.getWorkshops());
@@ -302,1080 +304,1107 @@ export default function TrainerDashboard() {
     return matchType && matchSearch;
   });
 
+  // Breadcrumbs title resolution
+  const getPageTitle = () => {
+    switch (currentPage) {
+      case 'radar': return t('Skill Gap Demand Radar', 'Skill Gap Demand Radar');
+      case 'sessions': return t('1:1 Mentorship Sessions', '1:1 Mentorship Sessions');
+      case 'courses': return t('Course Studio & Curriculum', 'Course Studio & Curriculum');
+      case 'resources': return t('Trainer Digital Library', 'Trainer Digital Library');
+      case 'clinic': return t('Rapid Doubt Clinic', 'Rapid Doubt Clinic');
+      case 'capstones': return t('Capstone & Code Reviews', 'Capstone & Code Reviews');
+      case 'analytics': return t('Cohort Intelligence & Analytics', 'Cohort Intelligence & Analytics');
+      default: return t('Trainer Command Center', 'Trainer Command Center');
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 flex flex-col lg:pl-60">
       <Navbar 
         breadcrumbs={[
-          { label: t('Trainer Command Center', 'Trainer Command Center') }
+          { label: t('Trainer Hub', 'Trainer Hub'), href: currentPage === 'overview' ? undefined : '/trainer' },
+          ...(currentPage !== 'overview' ? [{ label: getPageTitle() }] : [])
         ]} 
       />
 
       <main className="flex-1 max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
 
-        {/* 1. HERO BANNER: DISTINCTIVE TRAINER INSTRUCTION COMMAND */}
-        <div className="relative overflow-hidden bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-blue-800/60 shadow-xl">
-          <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
-          <div className="absolute bottom-0 right-1/3 -mb-20 w-60 h-60 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
+        {/* 1. DEDICATED PAGE 1: TRAINER OVERVIEW COMMAND CENTER */}
+        {currentPage === 'overview' && (
+          <div className="space-y-6">
+            {/* HERO BANNER */}
+            <div className="relative overflow-hidden bg-gradient-to-r from-blue-900 via-indigo-900 to-slate-900 text-white p-6 sm:p-8 rounded-3xl border border-blue-800/60 shadow-xl">
+              <div className="absolute top-0 right-0 -mr-16 -mt-16 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none" />
+              <div className="absolute bottom-0 right-1/3 -mb-20 w-60 h-60 bg-purple-500/10 rounded-full blur-3xl pointer-events-none" />
 
-          <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
-            <div className="space-y-2 max-w-2xl">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-semibold backdrop-blur-md">
-                <Radio className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
-                {t('Live Skill Gap Instruction Hub', 'Live Skill Gap Instruction Hub')}
+              <div className="relative z-10 flex flex-col lg:flex-row lg:items-center justify-between gap-6">
+                <div className="space-y-2 max-w-2xl">
+                  <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-blue-500/20 border border-blue-400/30 text-blue-200 text-xs font-semibold backdrop-blur-md">
+                    <Radio className="w-3.5 h-3.5 text-blue-400 animate-pulse" />
+                    {t('Live Skill Gap Instruction Hub', 'Live Skill Gap Instruction Hub')}
+                  </div>
+                  <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
+                    {t('Welcome', 'Welcome')}, {trainerName}
+                  </h1>
+                  <p className="text-sm text-blue-100/80 leading-relaxed">
+                    {t('Connect directly with trainees struggling with skill gaps, review 1-on-1 mentorship requests, launch remedial workshops, and curate accredited courses.', 'Connect directly with trainees struggling with skill gaps, review 1-on-1 mentorship requests, launch remedial workshops, and curate accredited courses.')}
+                  </p>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button 
+                    onClick={() => setNewCourseOpen(true)}
+                    className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold h-10 px-4 shadow-md transition-all flex items-center gap-1.5"
+                  >
+                    <Plus className="w-4 h-4" />
+                    {t('Create Course', 'Create Course')}
+                  </Button>
+                  <Button 
+                    onClick={() => setNewResourceOpen(true)}
+                    variant="outline"
+                    className="bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl text-xs font-bold h-10 px-4 backdrop-blur-md transition-all flex items-center gap-1.5"
+                  >
+                    <Upload className="w-4 h-4" />
+                    {t('Upload Material', 'Upload Material')}
+                  </Button>
+                </div>
               </div>
-              <h1 className="text-2xl sm:text-4xl font-extrabold tracking-tight">
-                {t('Welcome', 'Welcome')}, {trainerName}
-              </h1>
-              <p className="text-sm text-blue-100/80 leading-relaxed">
-                {t('Connect directly with trainees struggling with skill gaps, review 1-on-1 mentorship requests, launch remedial workshops, and curate accredited courses.', 'Connect directly with trainees struggling with skill gaps, review 1-on-1 mentorship requests, launch remedial workshops, and curate accredited courses.')}
-              </p>
+
+              {/* Quick Metrics Bar inside Hero with ANIMATED COUNTERS */}
+              <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10 text-xs">
+                <div>
+                  <span className="text-blue-200/70 block uppercase tracking-wider text-[10px] font-semibold">{t('Identified Gap Demands', 'Identified Gap Demands')}</span>
+                  <span className="text-xl font-black text-white mt-0.5 block">
+                    <AnimatedCounter target={gapDemands.reduce((acc, g) => acc + g.traineeCount, 0)} duration={1100} suffix=" Trainees" />
+                  </span>
+                </div>
+                <div>
+                  <span className="text-blue-200/70 block uppercase tracking-wider text-[10px] font-semibold">{t('Active 1:1 Inquiries', 'Active 1:1 Inquiries')}</span>
+                  <span className="text-xl font-black text-emerald-300 mt-0.5 block">
+                    <AnimatedCounter target={sessions.filter(s => s.status === 'requested' || s.status === 'confirmed').length} duration={800} suffix=" Scheduled" />
+                  </span>
+                </div>
+                <div>
+                  <span className="text-blue-200/70 block uppercase tracking-wider text-[10px] font-semibold">{t('Published Courses', 'Published Courses')}</span>
+                  <span className="text-xl font-black text-white mt-0.5 block">
+                    <AnimatedCounter target={courses.length} duration={700} suffix=" Active" />
+                  </span>
+                </div>
+                <div>
+                  <span className="text-blue-200/70 block uppercase tracking-wider text-[10px] font-semibold">{t('Competency Rating', 'Competency Rating')}</span>
+                  <span className="text-xl font-black text-amber-300 mt-0.5 block">
+                    <AnimatedCounter target={4.9} decimals={1} prefix="★ " suffix=" / 5.0" />
+                  </span>
+                </div>
+              </div>
             </div>
 
-            <div className="flex flex-wrap items-center gap-3">
-              <Button 
-                onClick={() => setNewCourseOpen(true)}
-                className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold h-10 px-4 shadow-md transition-all flex items-center gap-1.5"
-              >
-                <Plus className="w-4 h-4" />
-                {t('Create Course', 'Create Course')}
-              </Button>
-              <Button 
-                onClick={() => setNewResourceOpen(true)}
-                variant="outline"
-                className="bg-white/10 hover:bg-white/20 text-white border-white/20 rounded-xl text-xs font-bold h-10 px-4 backdrop-blur-md transition-all flex items-center gap-1.5"
-              >
-                <Upload className="w-4 h-4" />
-                {t('Upload Material', 'Upload Material')}
-              </Button>
+            {/* DEDICATED FEATURE LAUNCHPAD: 7 DISTINCT MODULES AS RICH CARDS */}
+            <div>
+              <h2 className="text-base font-bold text-slate-900 dark:text-white mb-3">
+                Trainer Operations & Pedagogical Modules
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                
+                {/* 1. Skill Gap Radar */}
+                <Card 
+                  onClick={() => handleNavigatePage('radar')}
+                  className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl hover:shadow-md transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400">
+                      <Target className="w-5 h-5" />
+                    </div>
+                    <Badge className="bg-rose-500 text-white text-[10px]">Live Radar</Badge>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-blue-600 transition-colors">
+                    Skill Gap Radar & Demand
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                    Diagnose 5 high-priority technical deficit clusters. Launch remedial workshops with 1-click Google Meet.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-blue-600">
+                    <span>
+                      <AnimatedCounter target={gapDemands.reduce((acc, g) => acc + g.traineeCount, 0)} suffix=" Trainees in Demand" />
+                    </span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </Card>
+
+                {/* 2. 1:1 Mentorship */}
+                <Card 
+                  onClick={() => handleNavigatePage('sessions')}
+                  className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl hover:shadow-md transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                    <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-200">
+                      Clinical Mentoring
+                    </Badge>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
+                    1-on-1 Remedial Mentorship
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                    Review personalized student session bookings, manage availability slots, and confirm appointments.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-emerald-600">
+                    <span>
+                      <AnimatedCounter target={sessions.length} suffix=" Active Inquiries" />
+                    </span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </Card>
+
+                {/* 3. Course Studio */}
+                <Card 
+                  onClick={() => handleNavigatePage('courses')}
+                  className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl hover:shadow-md transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400">
+                      <BookOpen className="w-5 h-5" />
+                    </div>
+                    <Badge variant="outline" className="text-[10px] text-purple-600 border-purple-200">
+                      Curriculum
+                    </Badge>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-purple-600 transition-colors">
+                    Curriculum Course Studio
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                    Curate accredited courses, structure video lectures, and monitor student completion progress.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-purple-600">
+                    <span>
+                      <AnimatedCounter target={courses.length} suffix=" Published Courses" />
+                    </span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </Card>
+
+                {/* 4. Trainer Library */}
+                <Card 
+                  onClick={() => handleNavigatePage('resources')}
+                  className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl hover:shadow-md transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400">
+                      <FolderGit2 className="w-5 h-5" />
+                    </div>
+                    <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-200">
+                      Drive Vault
+                    </Badge>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-amber-600 transition-colors">
+                    Trainer Digital Library & Drive
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                    Share lecture slides, problem sheets, and sync direct Google Drive / OneDrive material links with trainees.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-amber-600">
+                    <span>
+                      <AnimatedCounter target={resources.length} suffix=" Digital Assets" />
+                    </span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </Card>
+
+                {/* 5. Rapid Doubt Clinic */}
+                <Card 
+                  onClick={() => handleNavigatePage('clinic')}
+                  className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl hover:shadow-md transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-rose-50 dark:bg-rose-950/60 text-rose-600 dark:text-rose-400">
+                      <MessageSquare className="w-5 h-5" />
+                    </div>
+                    <Badge className="bg-rose-500 text-white text-[10px]">Rapid Desk</Badge>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-rose-600 transition-colors">
+                    Rapid Doubt Clinic Desk
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                    Resolve real-time blocker questions asked by trainees during coding practice and assessments.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-rose-600">
+                    <span>
+                      <AnimatedCounter target={doubtQueue.filter(d => d.status === 'pending').length} suffix=" Pending Questions" />
+                    </span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </Card>
+
+                {/* 6. Capstone Reviews */}
+                <Card 
+                  onClick={() => handleNavigatePage('capstones')}
+                  className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl hover:shadow-md transition-all cursor-pointer group"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-indigo-50 dark:bg-indigo-950/60 text-indigo-600 dark:text-indigo-400">
+                      <CheckSquare className="w-5 h-5" />
+                    </div>
+                    <Badge variant="outline" className="text-[10px] text-indigo-600 border-indigo-200">
+                      Rubrics & PRs
+                    </Badge>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-indigo-600 transition-colors">
+                    Capstone & PR Code Reviews
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1 line-clamp-2">
+                    Review student GitHub pull requests, evaluate architecture against industry rubrics, and certify portfolios.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-indigo-600">
+                    <span>
+                      <AnimatedCounter target={capstoneReviews.length} suffix=" Submissions" />
+                    </span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </Card>
+
+                {/* 7. Cohort Analytics */}
+                <Card 
+                  onClick={() => handleNavigatePage('analytics')}
+                  className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl hover:shadow-md transition-all cursor-pointer group md:col-span-2 lg:col-span-3"
+                >
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="p-2.5 rounded-xl bg-emerald-50 dark:bg-emerald-950/60 text-emerald-600 dark:text-emerald-400">
+                      <TrendingUp className="w-5 h-5" />
+                    </div>
+                    <Badge variant="outline" className="text-[10px] text-emerald-600 border-emerald-200">
+                      Growth Analytics
+                    </Badge>
+                  </div>
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-emerald-600 transition-colors">
+                    Cohort Intelligence & Trainee Growth Analytics
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-1">
+                    Analyze competency progression across remedial workshops, student pass rate curves, and feedback ratings.
+                  </p>
+                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-emerald-600">
+                    <span>View Student Performance Intelligence Reports</span>
+                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
+                  </div>
+                </Card>
+
+              </div>
             </div>
+
+            {/* UPCOMING REMEDIAL WORKSHOPS & CLINICS */}
+            <Card className="glass-card p-6 border-slate-200 dark:border-slate-800">
+              <div className="flex items-center justify-between mb-4">
+                <div>
+                  <h2 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Video className="w-4 h-4 text-blue-600" />
+                    Scheduled Live Remedial Bootcamps & Workshops
+                  </h2>
+                  <p className="text-xs text-slate-500">Interactive live problem-solving clinics bridging diagnosed trainee gaps</p>
+                </div>
+                <Button 
+                  onClick={() => {
+                    setSelectedDemand(gapDemands[0]);
+                    setWorkshopTitle(`Remediation Lab: Mastering ${gapDemands[0]?.skillName || 'Data Structures'}`);
+                    setWorkshopModalOpen(true);
+                  }}
+                  className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-8 rounded-xl"
+                >
+                  + New Workshop
+                </Button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {workshops.map(w => (
+                  <div key={w.id} className="p-4 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 flex flex-col justify-between space-y-3">
+                    <div>
+                      <div className="flex items-center justify-between">
+                        <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
+                          {w.targetSkillGap}
+                        </Badge>
+                        <span className="text-xs font-bold text-emerald-600">
+                          {w.registeredCount} / {w.maxSeats} Enrolled
+                        </span>
+                      </div>
+                      <h4 className="font-bold text-sm text-slate-900 dark:text-white mt-2">{w.title}</h4>
+                      <span className="text-xs text-slate-500 block mt-1">{w.date} • {w.time}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between pt-2 border-t border-slate-200/60 dark:border-slate-800">
+                      <span className="text-[11px] text-slate-400">Instructor: {w.trainerName}</span>
+                      <a 
+                        href={w.meetUrl} 
+                        target="_blank" 
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-700"
+                      >
+                        <Video className="w-3.5 h-3.5" />
+                        Join Room
+                      </a>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </Card>
+
           </div>
+        )}
 
-          {/* Quick Metrics Bar inside Hero */}
-          <div className="relative z-10 grid grid-cols-2 sm:grid-cols-4 gap-4 mt-6 pt-6 border-t border-white/10 text-xs">
-            <div>
-              <span className="text-blue-200/70 block uppercase tracking-wider text-[10px] font-semibold">{t('Identified Gap Demands', 'Identified Gap Demands')}</span>
-              <span className="text-xl font-black text-white mt-0.5 block">{gapDemands.reduce((acc, g) => acc + g.traineeCount, 0)} {t('Trainees', 'Trainees')}</span>
-            </div>
-            <div>
-              <span className="text-blue-200/70 block uppercase tracking-wider text-[10px] font-semibold">{t('Active 1:1 Inquiries', 'Active 1:1 Inquiries')}</span>
-              <span className="text-xl font-black text-emerald-300 mt-0.5 block">{sessions.filter(s => s.status === 'requested' || s.status === 'confirmed').length} {t('Scheduled', 'Scheduled')}</span>
-            </div>
-            <div>
-              <span className="text-blue-200/70 block uppercase tracking-wider text-[10px] font-semibold">{t('Published Courses', 'Published Courses')}</span>
-              <span className="text-xl font-black text-white mt-0.5 block">{courses.length} {t('Active', 'Active')}</span>
-            </div>
-            <div>
-              <span className="text-blue-200/70 block uppercase tracking-wider text-[10px] font-semibold">{t('Competency Rating', 'Competency Rating')}</span>
-              <span className="text-xl font-black text-amber-300 mt-0.5 block">★ 4.9/5.0</span>
-            </div>
-          </div>
-        </div>
-
-        {/* 2. NAVIGATION PILLS: 5 UNIQUE TRAINER WORKFLOWS */}
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 bg-white dark:bg-slate-900 p-1.5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs">
-          <button
-            onClick={() => handleTabClick('radar')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeTab === 'radar' 
-                ? 'bg-blue-600 text-white shadow-xs' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Target className="w-4 h-4" />
-            {t('Skill Gap Radar & Demand', 'Skill Gap Radar & Demand')}
-            <Badge className="bg-rose-500 text-white text-[10px] px-1.5 py-0 rounded-full ml-1">Live</Badge>
-          </button>
-
-          <button
-            onClick={() => handleTabClick('sessions')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeTab === 'sessions' 
-                ? 'bg-blue-600 text-white shadow-xs' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Calendar className="w-4 h-4" />
-            {t('1:1 Mentorship Sessions', '1:1 Mentorship Sessions')} ({sessions.length})
-          </button>
-
-          <button
-            onClick={() => handleTabClick('courses')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeTab === 'courses' 
-                ? 'bg-blue-600 text-white shadow-xs' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <BookOpen className="w-4 h-4" />
-            {t('Course Studio', 'Course Studio')} ({courses.length})
-          </button>
-
-          <button
-            onClick={() => handleTabClick('resources')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeTab === 'resources' 
-                ? 'bg-blue-600 text-white shadow-xs' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <FolderGit2 className="w-4 h-4" />
-            {t('Trainer Library', 'Trainer Library')} ({resources.length})
-          </button>
-
-          <button
-            onClick={() => handleTabClick('clinic')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeTab === 'clinic' 
-                ? 'bg-blue-600 text-white shadow-xs' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <Radio className="w-4 h-4 text-rose-500 animate-pulse" />
-            {t('Rapid Doubt Clinic', 'Rapid Doubt Clinic')} ({doubtQueue.filter(d => d.status === 'pending').length})
-          </button>
-
-          <button
-            onClick={() => handleTabClick('capstones')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeTab === 'capstones' 
-                ? 'bg-blue-600 text-white shadow-xs' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <CheckSquare className="w-4 h-4" />
-            {t('Capstone & Code Reviews', 'Capstone & Code Reviews')} ({capstoneReviews.length})
-          </button>
-
-          <button
-            onClick={() => handleTabClick('analytics')}
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all shrink-0 ${
-              activeTab === 'analytics' 
-                ? 'bg-blue-600 text-white shadow-xs' 
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-            }`}
-          >
-            <TrendingUp className="w-4 h-4" />
-            {t('Cohort Analytics & Feedback', 'Cohort Analytics & Feedback')}
-          </button>
-        </div>
-
-        {/* 3. TAB 1: TRAINEE SKILL GAP RADAR & REMEDIAL WORKSHOPS */}
-        {activeTab === 'radar' && (
+        {/* 2. DEDICATED PAGE 2: SKILL GAP DEMAND RADAR */}
+        {currentPage === 'radar' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Target className="w-5 h-5 text-blue-600" />
-                  {t('Live Trainee Skill Gap Demand Radar', 'Live Trainee Skill Gap Demand Radar')}
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Target className="w-5 h-5 text-rose-600" />
+                  Live Trainee Skill Gap Demand Radar
                 </h2>
-                <p className="text-xs text-slate-500">
-                  {t('Real-time aggregated gaps diagnosed in trainees. Launch focused remediation workshops or offer 1-on-1 clinics.', 'Real-time aggregated gaps diagnosed in trainees. Launch focused remediation workshops or offer 1-on-1 clinics.')}
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Aggregated real-time deficits diagnosed from trainee diagnostic MCQs and career goal benchmark algorithms.
                 </p>
               </div>
-              <Badge variant="outline" className="bg-blue-50 text-blue-700 border-blue-200 text-xs px-2.5 py-1">
-                {t('Updated in real-time', 'Updated in real-time')}
-              </Badge>
+              <div className="flex items-center gap-2">
+                <Badge variant="outline" className="text-xs bg-rose-50 text-rose-700 border-rose-200 font-bold px-3 py-1">
+                  <AnimatedCounter target={gapDemands.reduce((a, b) => a + b.traineeCount, 0)} suffix=" Total Trainees in Deficit" />
+                </Badge>
+              </div>
             </div>
 
+            {/* Radar Cards Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
               {gapDemands.map((demand) => (
-                <Card 
-                  key={demand.skillName} 
-                  className="p-5 rounded-2xl border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 space-y-4 hover:border-blue-300 dark:hover:border-blue-700 shadow-2xs transition-all"
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div>
-                      <Badge className={`text-[10px] font-bold mb-1.5 ${
-                        demand.urgency === 'High' 
-                          ? 'bg-rose-50 text-rose-700 border-rose-200' 
-                          : 'bg-amber-50 text-amber-700 border-amber-200'
-                      }`}>
-                        {demand.urgency} {t('Demand Gap', 'Demand Gap')}
+                <Card key={demand.id} className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <Badge 
+                        variant="outline" 
+                        className={`text-[10px] font-bold ${
+                          demand.urgency === 'Critical' 
+                            ? 'bg-rose-50 text-rose-700 border-rose-200' 
+                            : 'bg-amber-50 text-amber-700 border-amber-200'
+                        }`}
+                      >
+                        {demand.urgency} Demand Gap
                       </Badge>
-                      <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                        {demand.skillName}
-                      </h3>
-                      <span className="text-xs text-slate-400">{demand.category}</span>
+                      <span className="text-2xl font-black text-blue-600">
+                        <AnimatedCounter target={demand.traineeCount} />
+                        <span className="text-[10px] text-slate-400 block font-normal text-right">Trainees In Gap</span>
+                      </span>
                     </div>
 
-                    <div className="text-right">
-                      <span className="text-2xl font-black text-blue-600 block">{demand.traineeCount}</span>
-                      <span className="text-[10px] text-slate-400">{t('Trainees in Gap', 'Trainees in Gap')}</span>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base mt-2">{demand.skillName}</h3>
+                    <span className="text-xs text-slate-400 block mt-0.5">{demand.category}</span>
+
+                    <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2 text-xs">
+                      <div>
+                        <div className="flex justify-between font-semibold mb-1">
+                          <span className="text-slate-500">Avg Deficit Gap:</span>
+                          <span className="text-rose-600 font-bold">{demand.averageGapPercent}% Deficient</span>
+                        </div>
+                        <Progress value={demand.averageGapPercent} className="h-1.5 bg-slate-100 dark:bg-slate-800 [&>div]:bg-rose-500" />
+                      </div>
+                      <span className="text-[11px] text-slate-500 block pt-1">
+                        <strong>Curriculum Rec:</strong> {demand.topCourseRecommendation}
+                      </span>
                     </div>
                   </div>
 
-                  <div className="space-y-1.5 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                    <div className="flex justify-between text-slate-500">
-                      <span>{t('Avg Current Level', 'Avg Current Level')}</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-300">{demand.averageCurrentLevel}%</span>
-                    </div>
-                    <div className="flex justify-between text-slate-500">
-                      <span>{t('Target Benchmark', 'Target Benchmark')}</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-300">{demand.benchmarkLevel}%</span>
-                    </div>
-                    <Progress value={demand.averageCurrentLevel} className="h-1.5 mt-2 bg-slate-200 dark:bg-slate-700" />
-                  </div>
-
-                  <div className="flex items-center gap-2 pt-2 border-t border-slate-100 dark:border-slate-800">
-                    <Button
-                      size="sm"
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800">
+                    <Button 
                       onClick={() => openWorkshopLauncher(demand)}
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold h-8.5"
+                      className="w-full bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold h-9 rounded-xl flex items-center justify-center gap-1.5"
                     >
-                      <Video className="w-3.5 h-3.5 mr-1.5" />
-                      {t('Host Remedial Workshop', 'Host Remedial Workshop')}
+                      <Video className="w-4 h-4" />
+                      Host Remedial Workshop
                     </Button>
                   </div>
                 </Card>
               ))}
             </div>
-
-            {/* Scheduled Workshops Section */}
-            <div className="space-y-3 pt-4">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <Video className="w-4 h-4 text-emerald-600" />
-                {t('Active & Scheduled Remedial Workshops', 'Active & Scheduled Remedial Workshops')} ({workshops.length})
-              </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {workshops.map(ws => (
-                  <div 
-                    key={ws.id}
-                    className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 flex items-center justify-between gap-4 shadow-2xs"
-                  >
-                    <div className="space-y-1">
-                      <div className="flex items-center gap-2">
-                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
-                          {ws.skillName}
-                        </Badge>
-                        <span className="text-[11px] text-slate-400">{ws.scheduledAt}</span>
-                      </div>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white">{ws.title}</h4>
-                      <p className="text-[11px] text-slate-500">{ws.enrolledTraineesCount} / {ws.maxCapacity} {t('Seats Reserved', 'Seats Reserved')}</p>
-                    </div>
-
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        window.open(ws.meetingUrl || 'https://meet.google.com/sample-remediation-room', '_blank');
-                        toast.info('Joining workshop room...');
-                      }}
-                      className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold h-8 px-3 shrink-0"
-                    >
-                      {t('Enter Room', 'Enter Room')}
-                    </Button>
-                  </div>
-                ))}
-              </div>
-            </div>
           </div>
         )}
 
-        {/* 4. TAB 2: 1:1 MENTORSHIP SESSIONS */}
-        {activeTab === 'sessions' && (
+        {/* 3. DEDICATED PAGE 3: 1:1 MENTORSHIP SESSIONS */}
+        {currentPage === 'sessions' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-blue-600" />
-                  {t('1-on-1 Skill Remediation Inquiries', '1-on-1 Skill Remediation Inquiries')}
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Calendar className="w-5 h-5 text-emerald-600" />
+                  1-on-1 Remedial Mentorship Hub
                 </h2>
-                <p className="text-xs text-slate-500">
-                  {t('Trainees booking direct office hours based on your verified match with their skill gaps.', 'Trainees booking direct office hours based on your verified match with their skill gaps.')}
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Direct clinical appointments requested by trainees to bridge specific diagnostic gaps.
                 </p>
               </div>
-              <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs px-2.5 py-1">
-                {sessions.length} {t('Total Sessions', 'Total Sessions')}
+              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs px-3 py-1 font-bold">
+                <AnimatedCounter target={sessions.length} suffix=" Total Session Requests" />
               </Badge>
             </div>
 
-            <div className="space-y-3">
-              {sessions.length === 0 ? (
-                <div className="p-8 text-center bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-400">
-                  {t('No 1-on-1 mentorship sessions currently booked.', 'No 1-on-1 mentorship sessions currently booked.')}
-                </div>
-              ) : (
-                sessions.map((session) => (
-                  <div 
-                    key={session.id}
-                    className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3 hover:border-blue-300 transition-all"
-                  >
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                      <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 font-bold flex items-center justify-center text-sm shrink-0">
-                          {session.traineeName.split(' ').map(n => n[0]).join('')}
-                        </div>
-                        <div>
-                          <div className="flex items-center gap-2">
-                            <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                              {session.traineeName}
-                            </h3>
-                            <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px]">
-                              {t('Skill Gap', 'Skill Gap')}: {session.skillGap}
-                            </Badge>
-                          </div>
-                          <p className="text-xs text-slate-500">
-                            {t('Topic', 'Topic')}: <strong className="text-slate-700 dark:text-slate-300">{session.topic}</strong>
-                          </p>
-                        </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {sessions.map((sess) => (
+                <Card key={sess.id} className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white text-base">{sess.traineeName}</h3>
+                        <span className="text-xs text-slate-500 block mt-0.5">Focus Gap: <strong>{sess.skillGap}</strong></span>
                       </div>
+                      <Badge 
+                        variant="outline"
+                        className={`text-[10px] capitalize ${
+                          sess.status === 'confirmed' 
+                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                            : sess.status === 'pending'
+                              ? 'bg-amber-50 text-amber-700 border-amber-200'
+                              : 'bg-blue-50 text-blue-700 border-blue-200'
+                        }`}
+                      >
+                        {sess.status}
+                      </Badge>
+                    </div>
 
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
                       <div className="flex items-center gap-2">
-                        <Badge className={`text-xs font-bold uppercase tracking-wider ${
-                          session.status === 'confirmed' 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                            : session.status === 'completed'
-                            ? 'bg-purple-50 text-purple-700 border-purple-200'
-                            : session.status === 'cancelled'
-                            ? 'bg-rose-50 text-rose-700 border-rose-200'
-                            : 'bg-amber-50 text-amber-700 border-amber-200'
-                        }`}>
-                          {t(session.status, session.status)}
-                        </Badge>
+                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Date: <strong>{sess.scheduledDate}</strong></span>
                       </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl">
-                      <div>
-                        <span className="text-slate-400 block text-[11px]">{t('Scheduled Date', 'Scheduled Date')}</span>
-                        <strong className="text-slate-800 dark:text-slate-200">{session.scheduledDate}</strong>
+                      <div className="flex items-center gap-2">
+                        <Clock className="w-3.5 h-3.5 text-slate-400" />
+                        <span>Time Slot: <strong>{sess.timeSlot}</strong></span>
                       </div>
-                      <div>
-                        <span className="text-slate-400 block text-[11px]">{t('Time Slot', 'Time Slot')}</span>
-                        <strong className="text-slate-800 dark:text-slate-200">{session.scheduledTime} ({session.durationMinutes} mins)</strong>
-                      </div>
-                      <div>
-                        <span className="text-slate-400 block text-[11px]">{t('Trainee Notes', 'Trainee Notes')}</span>
-                        <span className="text-slate-600 dark:text-slate-300 line-clamp-1">{session.notes || 'No extra notes provided'}</span>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800">
-                      {session.meetingUrl && session.status === 'confirmed' ? (
-                        <a 
-                          href={session.meetingUrl} 
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="inline-flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:underline"
-                        >
-                          <Video className="w-3.5 h-3.5" />
-                          {t('Join Virtual Meeting Room', 'Join Virtual Meeting Room')}
-                        </a>
-                      ) : (
-                        <span className="text-[11px] text-slate-400">{t('Virtual link generated upon confirmation', 'Virtual link generated upon confirmation')}</span>
+                      {sess.notes && (
+                        <p className="text-[11px] text-slate-500 italic mt-2 bg-slate-50 dark:bg-slate-900/60 p-2 rounded-lg">
+                          "{sess.notes}"
+                        </p>
                       )}
-
-                      <div className="flex items-center gap-2">
-                        {session.status === 'requested' && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              onClick={() => handleSessionAction(session.id, 'cancelled')}
-                              className="text-xs h-7 rounded-lg text-rose-600 hover:bg-rose-50"
-                            >
-                              {t('Decline', 'Decline')}
-                            </Button>
-                            <Button
-                              size="sm"
-                              onClick={() => handleSessionAction(session.id, 'confirmed')}
-                              className="text-xs h-7 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-semibold"
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                              {t('Accept Session', 'Accept Session')}
-                            </Button>
-                          </>
-                        )}
-                        {session.status === 'confirmed' && (
-                          <Button
-                            size="sm"
-                            onClick={() => handleSessionAction(session.id, 'completed')}
-                            className="text-xs h-7 rounded-lg bg-blue-600 hover:bg-blue-700 text-white font-semibold"
-                          >
-                            <CheckSquare className="w-3.5 h-3.5 mr-1" />
-                            {t('Mark Completed', 'Mark Completed')}
-                          </Button>
-                        )}
-                      </div>
                     </div>
                   </div>
-                ))
-              )}
+
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                    {sess.status === 'pending' ? (
+                      <Button 
+                        size="sm"
+                        onClick={() => handleSessionAction(sess.id, 'confirmed')}
+                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 rounded-lg font-semibold"
+                      >
+                        Confirm Booking
+                      </Button>
+                    ) : (
+                      <>
+                        <a 
+                          href={sess.meetingLink || 'https://meet.google.com/capacity-mentorship-session'}
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 rounded-lg"
+                        >
+                          Launch Meet
+                        </a>
+                        <Button 
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleSessionAction(sess.id, 'completed')}
+                          className="text-xs h-8 rounded-lg"
+                        >
+                          Mark Complete
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </Card>
+              ))}
             </div>
           </div>
         )}
 
-        {/* 5. TAB 3: COURSE STUDIO */}
-        {activeTab === 'courses' && (
+        {/* 4. DEDICATED PAGE 4: COURSE STUDIO */}
+        {currentPage === 'courses' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <BookOpen className="w-5 h-5 text-blue-600" />
-                  {t('Course Studio & Curriculum Manager', 'Course Studio & Curriculum Manager')}
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <BookOpen className="w-5 h-5 text-purple-600" />
+                  Course Studio & Curriculum Hub
                 </h2>
-                <p className="text-xs text-slate-500">
-                  {t('Build structured competency courses that auto-map to trainee diagnostic gaps.', 'Build structured competency courses that auto-map to trainee diagnostic gaps.')}
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Author and manage accredited technical courses structured to eradicate diagnostic skill gaps.
                 </p>
               </div>
               <Button 
                 onClick={() => setNewCourseOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold h-9 px-4 shadow-xs"
+                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl h-9 px-4 flex items-center gap-1.5"
               >
-                <Plus className="w-4 h-4 mr-1.5" />
-                {t('Create New Course', 'Create New Course')}
+                <Plus className="w-4 h-4" />
+                Create New Course
               </Button>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              {courses.map(course => (
-                <div 
-                  key={course.id}
-                  className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 space-y-4 hover:border-blue-300 transition-all flex flex-col justify-between shadow-2xs"
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-start justify-between gap-3">
-                      <div>
-                        <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-[10px] mb-1.5">
-                          {course.subject}
-                        </Badge>
-                        <h3 className="text-base font-bold text-slate-900 dark:text-white">{course.title}</h3>
-                        <p className="text-xs text-slate-500 mt-0.5">{course.duration} • {course.difficulty}</p>
-                      </div>
-                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold shrink-0">
-                        {course.enrolledCount} {t('Enrolled', 'Enrolled')}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {courses.map((course) => (
+                <Card key={course.id} className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <Badge variant="outline" className="text-[10px] bg-purple-50 text-purple-700 border-purple-200 font-semibold mb-1">
+                        {course.subject}
+                      </Badge>
+                      <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
+                        ★ {course.rating.toFixed(1)}
                       </Badge>
                     </div>
 
-                    <p className="text-xs text-slate-600 dark:text-slate-300 line-clamp-2 leading-relaxed">
-                      {course.description}
-                    </p>
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base mt-1">{course.title}</h3>
+                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">{course.description}</p>
 
-                    <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl space-y-1 text-xs">
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider block">{t('Course Modules', 'Course Modules')} ({course.modules.length})</span>
-                      <ul className="space-y-1">
-                        {course.modules.slice(0, 2).map((m, idx) => (
-                          <li key={m.id} className="text-slate-700 dark:text-slate-300 flex items-center justify-between text-[11px]">
-                            <span>{idx + 1}. {m.title}</span>
-                            <span className="text-slate-400">{m.durationMinutes}m</span>
-                          </li>
-                        ))}
-                      </ul>
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                      <div className="flex justify-between">
+                        <span>Difficulty & Duration:</span>
+                        <strong>{course.difficulty} • {course.duration}</strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Active Enrolled Trainees:</span>
+                        <strong className="text-blue-600">
+                          <AnimatedCounter target={course.enrolledCount || 28} suffix=" Trainees" />
+                        </strong>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Modules in Syllabus:</span>
+                        <span>{course.modules?.length || 2} Interactive Modules</span>
+                      </div>
                     </div>
                   </div>
 
                   <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
-                    <span className="text-slate-400">{t('Rating', 'Rating')}: ★ {course.rating.toFixed(1)}</span>
+                    <span className="text-[11px] text-slate-400">Published by {course.trainerName}</span>
                     <Button 
                       size="sm" 
-                      variant="ghost" 
-                      onClick={() => toast.info(`Viewing live curriculum metrics for "${course.title}"`)}
-                      className="text-blue-600 text-xs font-semibold h-7 hover:bg-blue-50"
+                      onClick={() => navigate(`/courses/${course.id}/learn`)}
+                      className="bg-purple-600 hover:bg-purple-700 text-white text-xs h-8 rounded-lg"
                     >
-                      {t('Manage Syllabus & Analytics →', 'Manage Syllabus & Analytics →')}
+                      Preview Syllabus
                     </Button>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
         )}
 
-        {/* 6. TAB 4: TRAINER LIBRARY */}
-        {activeTab === 'resources' && (
+        {/* 5. DEDICATED PAGE 5: TRAINER DIGITAL LIBRARY & DRIVE VAULT */}
+        {currentPage === 'resources' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <FolderGit2 className="w-5 h-5 text-blue-600" />
-                  {t('Trainer Resource Library', 'Trainer Resource Library')}
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <FolderGit2 className="w-5 h-5 text-amber-500" />
+                  Trainer Digital Vault & Course Materials
                 </h2>
-                <p className="text-xs text-slate-500">
-                  {t('Repository of slide decks, lab handbooks, and recorded lecture modules shared with trainees.', 'Repository of slide decks, lab handbooks, and recorded lecture modules shared with trainees.')}
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Publish lecture presentations, cheat sheets, code templates, and sync direct Google Drive links with trainees.
                 </p>
               </div>
               <Button 
                 onClick={() => setNewResourceOpen(true)}
-                className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold h-9 px-4 shadow-xs"
+                className="bg-amber-600 hover:bg-amber-700 text-white text-xs font-semibold rounded-xl h-9 px-4 flex items-center gap-1.5"
               >
-                <Upload className="w-4 h-4 mr-1.5" />
-                {t('Upload New File', 'Upload New File')}
+                <Upload className="w-4 h-4" />
+                Upload Learning Asset
               </Button>
             </div>
 
             {/* Filter Bar */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/90 dark:border-slate-800">
-              <div className="flex items-center gap-1.5 overflow-x-auto">
-                {['all', 'pdf', 'presentation', 'lecture_video', 'study_material'].map((tType) => (
-                  <button
-                    key={tType}
-                    onClick={() => setResourceFilter(tType)}
-                    className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all uppercase tracking-wider text-[10px] ${
-                      resourceFilter === tType
-                        ? 'bg-blue-600 text-white shadow-xs'
-                        : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200'
-                    }`}
-                  >
-                    {t(tType.replace('_', ' '), tType.replace('_', ' '))}
-                  </button>
-                ))}
-              </div>
-
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
-                <Input 
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 bg-white dark:bg-slate-900 p-3 rounded-2xl border border-slate-200/90 dark:border-slate-800">
+              <div className="relative w-full sm:w-80">
+                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                <Input
+                  placeholder="Search resources by title or subject..."
                   value={resourceSearch}
                   onChange={(e) => setResourceSearch(e.target.value)}
-                  placeholder={t('Search resources...', 'Search resources...')}
-                  className="text-xs pl-8 h-8 rounded-xl"
+                  className="pl-9 h-9 text-xs rounded-xl"
                 />
+              </div>
+
+              <div className="flex items-center gap-2 w-full sm:w-auto">
+                <span className="text-xs text-slate-500 font-medium shrink-0">Type:</span>
+                <select
+                  value={resourceFilter}
+                  onChange={(e) => setResourceFilter(e.target.value)}
+                  className="h-9 px-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-700 dark:text-slate-300 font-medium focus:outline-hidden"
+                >
+                  <option value="all">All File Types</option>
+                  <option value="pdf">PDF Documents</option>
+                  <option value="slides">Presentations & Slides</option>
+                  <option value="code">Code Repositories</option>
+                  <option value="worksheet">Problem Worksheets</option>
+                </select>
               </div>
             </div>
 
-            {/* Resource List */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredResources.map(res => (
-                <div 
-                  key={res.id} 
-                  className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 space-y-3 hover:border-blue-300 transition-all flex flex-col justify-between shadow-2xs"
-                >
-                  <div className="space-y-2">
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="w-8 h-8 rounded-lg bg-blue-50 dark:bg-blue-950/60 text-blue-600 flex items-center justify-center shrink-0">
-                        <FileText className="w-4 h-4" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {filteredResources.map((res) => (
+                <Card key={res.id} className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <Badge variant="outline" className="text-[10px] uppercase font-bold text-amber-700 bg-amber-50 border-amber-200">
+                        {res.type}
+                      </Badge>
+                      <span className="text-[11px] text-slate-400">{res.fileSizeMb} MB</span>
+                    </div>
+
+                    <h3 className="font-bold text-slate-900 dark:text-white text-base mt-2">{res.title}</h3>
+                    <span className="text-xs text-slate-500 block mt-0.5">{res.subject}</span>
+
+                    {res.driveUrl && (
+                      <div className="mt-3 p-2 rounded-lg bg-blue-50/60 dark:bg-blue-950/40 border border-blue-100 dark:border-blue-900 flex items-center justify-between text-xs text-blue-700 dark:text-blue-300">
+                        <span className="font-medium truncate max-w-[200px]">{res.driveUrl}</span>
+                        <a href={res.driveUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline shrink-0">
+                          <ExternalLink className="w-3.5 h-3.5" />
+                        </a>
                       </div>
-                      <Badge variant="outline" className="text-[9px] uppercase font-mono">
-                        {res.type.replace('_', ' ')}
+                    )}
+                  </div>
+
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs">
+                    <span className="text-[10px] text-slate-400">
+                      Uploaded {new Date(res.uploadedAt).toLocaleDateString()}
+                    </span>
+                    <Button 
+                      size="sm" 
+                      onClick={() => {
+                        window.open(res.driveUrl || res.fileUrl, '_blank');
+                        toast.success('Resource downloaded!');
+                      }}
+                      className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-8 rounded-lg"
+                    >
+                      Open File
+                    </Button>
+                  </div>
+                </Card>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* 6. DEDICATED PAGE 6: RAPID DOUBT CLINIC */}
+        {currentPage === 'clinic' && (
+          <div className="space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <MessageSquare className="w-5 h-5 text-rose-600" />
+                  Rapid Doubt Clinic Desk — Real-Time Trainee Resolution
+                </h2>
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Trainees facing code blockers submit queries. Provide step-by-step guidance and code explanations.
+                </p>
+              </div>
+              <Badge className="bg-rose-500 text-white text-xs px-3 py-1 font-bold">
+                <AnimatedCounter target={doubtQueue.filter(d => d.status === 'pending').length} suffix=" Active Blocker Doubts" />
+              </Badge>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              {doubtQueue.map((item) => (
+                <Card key={item.id} className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white text-base">{item.studentName}</h3>
+                        <span className="text-xs text-slate-400">{item.academicYear} • {item.postedTime}</span>
+                      </div>
+                      <Badge 
+                        variant="outline" 
+                        className={`text-[10px] ${item.urgency === 'High' ? 'bg-rose-50 text-rose-700 border-rose-200' : 'bg-slate-50'}`}
+                      >
+                        {item.urgency}
                       </Badge>
                     </div>
 
-                    <div>
-                      <h4 className="text-xs font-bold text-slate-900 dark:text-white line-clamp-1">{res.title}</h4>
-                      <p className="text-[11px] text-slate-400 mt-0.5">{res.subject} • {res.fileSizeMb} MB</p>
+                    <div className="mt-3">
+                      <span className="text-xs font-bold text-blue-600 block">{item.topic}</span>
+                      <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 leading-relaxed bg-slate-50 dark:bg-slate-900/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+                        "{item.question}"
+                      </p>
                     </div>
                   </div>
 
-                  <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px]">
-                    <span className="text-slate-400">{t('Published', 'Published')} {new Date(res.uploadedAt).toLocaleDateString()}</span>
-                    <div className="flex items-center gap-2">
-                      {res.driveUrl && (
-                        <a 
-                          href={res.driveUrl} 
-                          target="_blank" 
-                          rel="noopener noreferrer"
-                          className="inline-flex items-center gap-1.5 text-blue-600 hover:text-blue-700 font-bold text-xs bg-blue-50 dark:bg-blue-950/60 px-3 py-1 rounded-xl border border-blue-200 dark:border-blue-900 transition-colors"
-                        >
-                          <span>Drive Link</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </a>
-                      )}
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-2">
+                    <Input 
+                      placeholder="Write rapid code solution or explanation..."
+                      className="text-xs h-8 rounded-lg"
+                    />
+                    <div className="flex justify-end gap-2">
                       <Button 
-                        size="sm" 
-                        variant="ghost" 
-                        onClick={() => toast.success(`Downloading ${res.title}`)}
-                        className="text-blue-600 text-xs font-semibold h-8 px-3 rounded-xl hover:bg-slate-100"
+                        size="sm"
+                        onClick={() => {
+                          setDoubtQueue(prev => prev.map(d => d.id === item.id ? { ...d, status: 'resolved' } : d));
+                          toast.success(`Solution sent to ${item.studentName}! Doubt resolved.`);
+                        }}
+                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 rounded-lg font-semibold"
                       >
-                        {t('Download', 'Download')}
+                        Send Solution & Resolve
                       </Button>
                     </div>
                   </div>
-                </div>
+                </Card>
               ))}
             </div>
           </div>
         )}
 
-        {/* TAB: LIVE RAPID DOUBT CLINIC (STUDENT QUEUE) */}
-        {activeTab === 'clinic' && (
+        {/* 7. DEDICATED PAGE 7: CAPSTONE & CODE REVIEWS */}
+        {currentPage === 'capstones' && (
           <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold mb-1.5">
-                  <Radio className="w-3.5 h-3.5 animate-pulse" />
-                  Live Trainee Doubt Queue
-                </div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Rapid Doubt Clearance Clinic
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <CheckSquare className="w-5 h-5 text-indigo-600" />
+                  Capstone & PR Code Review Arena
                 </h2>
-                <p className="text-xs text-slate-500">
-                  Accept pending trainee doubts from your enrolled cohorts. Launch 1-click debug calls or post code snippet explanations.
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Inspect student pull requests on GitHub, evaluate software architectural patterns, and grade capstones.
                 </p>
               </div>
-
-              <div className="flex items-center gap-2">
-                <Badge className="bg-rose-500 text-white font-bold text-xs px-3 py-1">
-                  {doubtQueue.filter(d => d.status === 'pending').length} In Waiting Queue
-                </Badge>
-              </div>
+              <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs px-3 py-1 font-bold">
+                <AnimatedCounter target={capstoneReviews.length} suffix=" Submissions in Arena" />
+              </Badge>
             </div>
 
-            <div className="space-y-3">
-              {doubtQueue.map(doubt => (
-                <div 
-                  key={doubt.id}
-                  className={`p-5 rounded-2xl border transition-all ${
-                    doubt.status === 'resolved'
-                      ? 'bg-slate-50 dark:bg-slate-800/40 border-slate-200 dark:border-slate-800 opacity-70'
-                      : 'bg-white dark:bg-slate-900 border-slate-200/90 dark:border-slate-800 shadow-xs'
-                  }`}
-                >
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-bold text-sm text-slate-900 dark:text-white">{doubt.studentName}</span>
-                        <Badge variant="outline" className="text-[10px] bg-blue-50 text-blue-700 border-blue-200">
-                          {doubt.academicYear}
-                        </Badge>
-                        <Badge className={`text-[10px] font-bold ${
-                          doubt.urgency === 'High' ? 'bg-rose-100 text-rose-800 border-rose-200' : 'bg-slate-100 text-slate-700'
-                        }`}>
-                          {doubt.urgency} Urgency
-                        </Badge>
-                        <span className="text-[11px] text-slate-400">&bull; {doubt.postedTime}</span>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              {capstoneReviews.map((rev) => (
+                <Card key={rev.id} className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
+                  <div>
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-bold text-slate-900 dark:text-white text-base">{rev.projectTitle}</h3>
+                        <span className="text-xs text-slate-500">Submitted by <strong>{rev.studentName}</strong> • {rev.submittedAt}</span>
                       </div>
-
-                      <div className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                        Topic: {doubt.topic}
-                      </div>
-
-                      <p className="text-xs text-slate-700 dark:text-slate-300 leading-relaxed max-w-3xl bg-slate-50 dark:bg-slate-800/60 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                        "{doubt.question}"
-                      </p>
-                    </div>
-
-                    <div className="flex sm:flex-col gap-2 shrink-0">
-                      {doubt.status === 'pending' ? (
-                        <>
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              toast.success(`Starting 1:1 Live Debug Room with ${doubt.studentName}... Joining audio/video stream!`);
-                              setDoubtQueue(prev => prev.map(d => d.id === doubt.id ? { ...d, status: 'in_call' } : d));
-                            }}
-                            className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold h-9 px-3.5 shadow-xs flex items-center gap-1.5"
-                          >
-                            <Video className="w-3.5 h-3.5" />
-                            Launch Debug Room
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            onClick={() => {
-                              toast.success(`Doubt marked resolved. Competency gain credited to ${doubt.studentName}.`);
-                              setDoubtQueue(prev => prev.map(d => d.id === doubt.id ? { ...d, status: 'resolved' } : d));
-                            }}
-                            className="text-xs rounded-xl h-9 border-slate-200 dark:border-slate-700 font-semibold"
-                          >
-                            <CheckCircle2 className="w-3.5 h-3.5 mr-1 text-emerald-600" />
-                            Mark Resolved
-                          </Button>
-                        </>
-                      ) : (
-                        <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold py-1 px-3">
-                          ✓ Resolved & Evaluated
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        {/* TAB: CAPSTONE & CODE REVIEW ARENA */}
-        {activeTab === 'capstones' && (
-          <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-200/90 dark:border-slate-800 shadow-2xs">
-              <div>
-                <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200 text-xs font-bold mb-1.5">
-                  <CheckSquare className="w-3.5 h-3.5" />
-                  Industry Project Evaluation
-                </div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white">
-                  Trainee Capstone & Project Review Arena
-                </h2>
-                <p className="text-xs text-slate-500">
-                  Evaluate real GitHub repositories submitted by trainees to award tamper-proof industry competency credentials.
-                </p>
-              </div>
-
-              <Button
-                size="sm"
-                onClick={() => toast.info('Prompted students with new Capstone Challenge: "Distributed Rate Limiter in Go"')}
-                className="bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold h-9 px-4 shadow-xs"
-              >
-                <Plus className="w-3.5 h-3.5 mr-1.5" />
-                Dispatch New Capstone Challenge
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              {capstoneReviews.map(rev => (
-                <div key={rev.id} className="p-5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 shadow-2xs space-y-3">
-                  <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
-                    <div className="space-y-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-sm text-slate-900 dark:text-white">{rev.projectTitle}</span>
-                        <Badge className={rev.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px] font-bold' : 'bg-amber-50 text-amber-700 border-amber-200 text-[10px] font-bold'}>
-                          {rev.status === 'approved' ? `Approved (${rev.score}/100)` : 'Pending Review'}
-                        </Badge>
-                      </div>
-                      <p className="text-xs text-slate-500">
-                        Submitted by: <strong className="text-slate-800 dark:text-slate-200">{rev.studentName}</strong> &bull; {rev.submittedAt}
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <a
-                        href={rev.githubUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 text-xs font-semibold hover:bg-slate-100"
+                      <Badge 
+                        variant="outline"
+                        className={`text-[10px] capitalize ${rev.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
                       >
-                        <FolderGit2 className="w-3.5 h-3.5 text-slate-600" />
-                        <span>GitHub Code</span>
-                        <ExternalLink className="w-3 h-3 text-slate-400" />
-                      </a>
-                      <a
-                        href={rev.demoUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-blue-200 dark:border-blue-900 bg-blue-50/70 text-blue-700 dark:text-blue-300 text-xs font-semibold hover:bg-blue-100"
-                      >
-                        <PlayCircle className="w-3.5 h-3.5" />
-                        <span>Live Demo</span>
-                        <ExternalLink className="w-3 h-3" />
-                      </a>
+                        {rev.status.replace('_', ' ')}
+                      </Badge>
                     </div>
-                  </div>
 
-                  <div className="flex items-center justify-between pt-2 border-t border-slate-100 dark:border-slate-800 text-xs">
-                    <div className="flex items-center gap-1.5">
-                      <span className="text-slate-400 text-[11px]">Competencies Tested:</span>
+                    <div className="mt-3 flex flex-wrap gap-1.5">
                       {rev.skillsTargeted.map((s, idx) => (
-                        <Badge key={idx} variant="outline" className="text-[10px] font-normal bg-slate-50 dark:bg-slate-800 text-slate-600">
+                        <Badge key={idx} variant="outline" className="text-[10px] bg-slate-50">
                           {s}
                         </Badge>
                       ))}
                     </div>
 
-                    {rev.status === 'pending_review' ? (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          onClick={() => {
-                            setCapstoneReviews(prev => prev.map(r => r.id === rev.id ? { ...r, status: 'approved', score: 92 } : r));
-                            toast.success(`Project approved with score 92/100! Endorsement badge sent to ${rev.studentName}.`);
-                          }}
-                          className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold h-8 px-3"
-                        >
-                          <CheckCircle2 className="w-3.5 h-3.5 mr-1" />
-                          Approve with Score 92/100
-                        </Button>
-                      </div>
-                    ) : (
-                      <span className="text-xs text-emerald-600 font-bold">
-                        ✓ Verified & Credited to Student Profile
-                      </span>
-                    )}
+                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center gap-4 text-xs font-semibold">
+                      <a href={rev.githubUrl} target="_blank" rel="noreferrer" className="text-blue-600 hover:underline flex items-center gap-1">
+                        <Code className="w-3.5 h-3.5" />
+                        GitHub Repository
+                      </a>
+                      <a href={rev.demoUrl} target="_blank" rel="noreferrer" className="text-emerald-600 hover:underline flex items-center gap-1">
+                        <ExternalLink className="w-3.5 h-3.5" />
+                        Live Demo App
+                      </a>
+                    </div>
                   </div>
-                </div>
+
+                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                      Rubric Score: {rev.score ? `${rev.score}/100` : 'Pending Score'}
+                    </span>
+                    <Button 
+                      size="sm"
+                      onClick={() => {
+                        setCapstoneReviews(prev => prev.map(r => r.id === rev.id ? { ...r, status: 'approved', score: 96 } : r));
+                        toast.success(`Project ${rev.projectTitle} certified! Grade: 96/100`);
+                      }}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 rounded-lg font-semibold"
+                    >
+                      {rev.status === 'approved' ? 'Update Grade' : 'Approve & Certify'}
+                    </Button>
+                  </div>
+                </Card>
               ))}
             </div>
           </div>
         )}
 
-        {/* 7. TAB 5: COHORT ANALYTICS & FEEDBACK */}
-        {activeTab === 'analytics' && (
+        {/* 8. DEDICATED PAGE 8: COHORT ANALYTICS & INTELLIGENCE */}
+        {currentPage === 'analytics' && (
           <div className="space-y-6">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <div>
-                <h2 className="text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <TrendingUp className="w-5 h-5 text-blue-600" />
-                  {t('Cohort Performance & Trainee Feedback', 'Cohort Performance & Trainee Feedback')}
+                <h2 className="text-xl font-extrabold text-slate-900 dark:text-white flex items-center gap-2">
+                  <TrendingUp className="w-5 h-5 text-emerald-600" />
+                  Cohort Intelligence & Trainee Growth Analytics
                 </h2>
-                <p className="text-xs text-slate-500">
-                  {t('Track competency gap remediation velocity and authentic student ratings.', 'Track competency gap remediation velocity and authentic student ratings.')}
+                <p className="text-xs text-slate-500 mt-0.5">
+                  Pedagogical assessment pass rates, competency growth curves before vs. after instruction, and student NPS satisfaction.
                 </p>
               </div>
+              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs px-3 py-1 font-bold">
+                <AnimatedCounter target={94} suffix="% Success Pass Rate" />
+              </Badge>
             </div>
 
-            {/* KPI Cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-              <Card className="glass-card p-5 border-slate-200 dark:border-slate-800">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('Remediation Success Rate', 'Remediation Success Rate')}</span>
-                <div className="text-3xl font-black text-emerald-600 mt-1">94.2%</div>
-                <span className="text-[11px] text-slate-400">{t('Trainees passed benchmark within 3 weeks', 'Trainees passed benchmark within 3 weeks')}</span>
-              </Card>
-
-              <Card className="glass-card p-5 border-slate-200 dark:border-slate-800">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('Avg Competency Jump', 'Avg Competency Jump')}</span>
-                <div className="text-3xl font-black text-blue-600 mt-1">+38%</div>
-                <span className="text-[11px] text-slate-400">{t('Across OOP, SQL, & System Architecture', 'Across OOP, SQL, & System Architecture')}</span>
-              </Card>
-
-              <Card className="glass-card p-5 border-slate-200 dark:border-slate-800">
-                <span className="text-xs font-bold uppercase tracking-wider text-slate-500">{t('Student Satisfaction', 'Student Satisfaction')}</span>
-                <div className="text-3xl font-black text-amber-500 mt-1">★ 4.92 / 5.0</div>
-                <span className="text-[11px] text-slate-400">{t('Verified by accredited survey feedback', 'Verified by accredited survey feedback')}</span>
-              </Card>
-            </div>
-
-            {/* Feedback Reviews List */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                <MessageSquare className="w-4 h-4 text-blue-600" />
-                {t('Verified Trainee Endorsements & Reviews', 'Verified Trainee Endorsements & Reviews')} ({feedbackList.length})
+            {/* Growth Curves */}
+            <Card className="glass-card p-6 border-slate-200 dark:border-slate-800 space-y-4">
+              <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                Skill Gap Eradication Trajectory (Before vs After Remediation)
               </h3>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {feedbackList.map(fb => (
-                  <div key={fb.id} className="p-4 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 space-y-2 shadow-2xs">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-blue-100 text-blue-700 font-bold flex items-center justify-center text-xs">
-                          {fb.traineeName[0]}
-                        </div>
-                        <strong className="text-xs text-slate-900 dark:text-white">{fb.traineeName}</strong>
-                      </div>
-                      <span className="text-amber-500 font-bold text-xs">★ {fb.courseRating}/5</span>
-                    </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed italic">
-                      "{fb.feedbackText}"
-                    </p>
-                    <div className="pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
-                      <span>{t('Trainer Score', 'Trainer Score')}: {fb.trainerScore}/10</span>
-                      <span>{new Date(fb.createdAt).toLocaleDateString()}</span>
-                    </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span>Data Structures & Algorithmic Complexity</span>
+                    <span className="text-emerald-600 font-bold">+52% Gain (32% → 84%)</span>
                   </div>
-                ))}
+                  <Progress value={84} className="h-2 bg-slate-100 dark:bg-slate-800 [&>div]:bg-emerald-500" />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span>Enterprise OOP & Modular Clean Architecture</span>
+                    <span className="text-emerald-600 font-bold">+48% Gain (40% → 88%)</span>
+                  </div>
+                  <Progress value={88} className="h-2 bg-slate-100 dark:bg-slate-800 [&>div]:bg-emerald-500" />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-xs font-semibold mb-1">
+                    <span>Relational Database Indexing & Query Plans</span>
+                    <span className="text-emerald-600 font-bold">+55% Gain (35% → 90%)</span>
+                  </div>
+                  <Progress value={90} className="h-2 bg-slate-100 dark:bg-slate-800 [&>div]:bg-emerald-500" />
+                </div>
               </div>
+            </Card>
+
+            {/* Trainee Feedback Testimonials */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <Card className="glass-card p-5 border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <strong className="text-sm text-slate-900 dark:text-white">Pavan Kalyan Varma</strong>
+                  <span className="text-amber-500 text-xs font-bold">★ 5.0</span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+                  "Dr. Priya's workshop on Graph algorithms helped me crack my Google mock interview. The 1-on-1 clinic resolved my AVL tree pointer confusion instantly."
+                </p>
+                <span className="text-[10px] text-slate-400 block mt-2">Placed at Google Cloud</span>
+              </Card>
+
+              <Card className="glass-card p-5 border-slate-200 dark:border-slate-800">
+                <div className="flex items-center justify-between">
+                  <strong className="text-sm text-slate-900 dark:text-white">Neha Chawla</strong>
+                  <span className="text-amber-500 text-xs font-bold">★ 5.0</span>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+                  "The SQL Query Indexing clinic transformed my database understanding. The practical EXPLAIN ANALYZE traces made everything so clear."
+                </p>
+                <span className="text-[10px] text-slate-400 block mt-2">3rd Year IT • Anna University</span>
+              </Card>
             </div>
           </div>
         )}
 
       </main>
 
-      {/* MODAL 1: Create Course Modal */}
+      {/* CREATE COURSE MODAL */}
       <Dialog open={newCourseOpen} onOpenChange={setNewCourseOpen}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-              {t('Create New Course', 'Create New Course')}
-            </DialogTitle>
+            <DialogTitle className="text-base font-bold">Create Accredited Course</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              {t('Publish structured modules targeted at trainee skill gaps.', 'Publish structured modules targeted at trainee skill gaps.')}
+              Publish structured curriculum to bridge trainee skill gaps.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleCreateCourse} className="space-y-3 pt-2">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Course Title', 'Course Title')}</label>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Course Title</label>
               <Input 
-                value={newCourseTitle} 
-                onChange={(e) => setNewCourseTitle(e.target.value)} 
-                placeholder="e.g. Distributed Cloud Computing & Microservices" 
-                className="text-xs rounded-xl"
+                placeholder="e.g. Mastering High-Throughput Microservices"
+                value={newCourseTitle}
+                onChange={e => setNewCourseTitle(e.target.value)}
                 required
+                className="text-xs rounded-xl h-9"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Subject Area', 'Subject Area')}</label>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Subject Domain</label>
               <Input 
-                value={newCourseSubject} 
-                onChange={(e) => setNewCourseSubject(e.target.value)} 
-                placeholder="e.g. Data Structures, Cloud, Python" 
-                className="text-xs rounded-xl"
+                placeholder="e.g. Distributed Systems"
+                value={newCourseSubject}
+                onChange={e => setNewCourseSubject(e.target.value)}
                 required
+                className="text-xs rounded-xl h-9"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Difficulty', 'Difficulty')}</label>
-                <select 
-                  value={newCourseDifficulty} 
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Difficulty</label>
+                <select
+                  value={newCourseDifficulty}
                   onChange={(e) => setNewCourseDifficulty(e.target.value as any)}
-                  className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
+                  className="w-full h-9 px-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium"
                 >
-                  <option value="Beginner">{t('Beginner', 'Beginner')}</option>
-                  <option value="Intermediate">{t('Intermediate', 'Intermediate')}</option>
-                  <option value="Advanced">{t('Advanced', 'Advanced')}</option>
+                  <option value="Beginner">Beginner</option>
+                  <option value="Intermediate">Intermediate</option>
+                  <option value="Advanced">Advanced</option>
                 </select>
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Duration', 'Duration')}</label>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Duration</label>
                 <Input 
-                  value={newCourseDuration} 
-                  onChange={(e) => setNewCourseDuration(e.target.value)} 
-                  placeholder="e.g. 6 weeks (24 hours)" 
-                  className="text-xs rounded-xl"
+                  value={newCourseDuration}
+                  onChange={e => setNewCourseDuration(e.target.value)}
+                  className="text-xs rounded-xl h-9"
                 />
               </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Overview Description', 'Overview Description')}</label>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Description</label>
               <textarea 
-                value={newCourseDesc} 
-                onChange={(e) => setNewCourseDesc(e.target.value)} 
-                placeholder="Curriculum summary and practical milestones..." 
-                className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
                 rows={3}
+                placeholder="Course objectives and target competencies..."
+                value={newCourseDesc}
+                onChange={e => setNewCourseDesc(e.target.value)}
+                className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl focus:outline-hidden"
               />
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setNewCourseOpen(false)} className="rounded-xl text-xs">
-                {t('Cancel', 'Cancel')}
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" variant="ghost" onClick={() => setNewCourseOpen(false)} className="text-xs h-9">
+                Cancel
               </Button>
-              <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold">
-                {t('Publish Course', 'Publish Course')}
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 font-semibold rounded-xl">
+                Publish Course
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 2: Upload Material Modal */}
+      {/* UPLOAD RESOURCE MODAL */}
       <Dialog open={newResourceOpen} onOpenChange={setNewResourceOpen}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white">
-              {t('Upload Material', 'Upload Material')}
-            </DialogTitle>
+            <DialogTitle className="text-base font-bold">Upload Learning Material</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              {t('Add presentations, lecture recordings, notes, or sample tests.', 'Add presentations, lecture recordings, notes, or sample tests.')}
+              Publish study materials, slides, or direct Google Drive links for your trainees.
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleUploadResource} className="space-y-3 pt-2">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Document / Material Name', 'Document / Material Name')}</label>
+          <form onSubmit={handlePublishResource} className="space-y-3 pt-2">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Resource Title</label>
               <Input 
-                value={newResTitle} 
-                onChange={(e) => setNewResTitle(e.target.value)} 
-                placeholder="e.g. Distributed Consensus Algorithms Guide.pdf" 
-                className="text-xs rounded-xl"
+                placeholder="e.g. Graph Algorithms Cheat Sheet & Code Snippets"
+                value={newResTitle}
+                onChange={e => setNewResTitle(e.target.value)}
                 required
+                className="text-xs rounded-xl h-9"
               />
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Resource Type', 'Resource Type')}</label>
-              <select 
-                value={newResType} 
-                onChange={(e) => setNewResType(e.target.value as any)}
-                className="w-full text-xs p-2 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900"
-              >
-                <option value="pdf">PDF Handbook / Notes</option>
-                <option value="presentation">Presentation Slides (.pptx)</option>
-                <option value="lecture_video">Recorded Video Lecture</option>
-                <option value="study_material">Code & Study Repository</option>
-              </select>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Subject</label>
+                <Input 
+                  placeholder="e.g. Data Structures"
+                  value={newResSubject}
+                  onChange={e => setNewResSubject(e.target.value)}
+                  className="text-xs rounded-xl h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Type</label>
+                <select
+                  value={newResType}
+                  onChange={(e) => setNewResType(e.target.value as any)}
+                  className="w-full h-9 px-3 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-800 dark:text-slate-200 font-medium"
+                >
+                  <option value="pdf">PDF Guide</option>
+                  <option value="slides">Slides Presentation</option>
+                  <option value="code">Source Code Zip</option>
+                  <option value="worksheet">Problem Worksheet</option>
+                </select>
+              </div>
             </div>
 
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Subject Area', 'Subject Area')}</label>
-              <Input 
-                value={newResSubject} 
-                onChange={(e) => setNewResSubject(e.target.value)} 
-                placeholder="e.g. Algorithms" 
-                className="text-xs rounded-xl"
-              />
-            </div>
-
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center justify-between">
-                <span>{t('Google Drive / Cloud Link', 'Google Drive / Cloud Link')}</span>
-                <span className="text-[10px] text-blue-500 font-normal">Drive, Dropbox, GitHub</span>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Google Drive or Cloud URL (Optional)
               </label>
               <Input 
-                value={newResDriveUrl} 
-                onChange={(e) => setNewResDriveUrl(e.target.value)} 
-                placeholder="https://drive.google.com/file/d/..." 
-                className="text-xs rounded-xl"
+                placeholder="https://drive.google.com/file/d/..."
+                value={newResDriveUrl}
+                onChange={e => setNewResDriveUrl(e.target.value)}
+                className="text-xs rounded-xl h-9 font-mono"
               />
-              <p className="text-[10px] text-slate-400">
-                Trainees can directly preview or open this shared Drive folder/file from their course library.
-              </p>
             </div>
 
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setNewResourceOpen(false)} className="rounded-xl text-xs h-9 px-3.5">
-                {t('Cancel', 'Cancel')}
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" variant="ghost" onClick={() => setNewResourceOpen(false)} className="text-xs h-9">
+                Cancel
               </Button>
-              <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold h-9 px-4 shadow-xs">
-                {t('Upload Material', 'Upload Material')}
+              <Button type="submit" className="bg-amber-600 hover:bg-amber-700 text-white text-xs h-9 font-semibold rounded-xl">
+                Publish to Library
               </Button>
             </div>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* MODAL 3: Launch Remedial Workshop Modal */}
+      {/* LAUNCH WORKSHOP MODAL */}
       <Dialog open={workshopModalOpen} onOpenChange={setWorkshopModalOpen}>
-        <DialogContent className="max-w-md rounded-2xl p-6 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800">
+        <DialogContent className="max-w-md rounded-2xl">
           <DialogHeader>
-            <DialogTitle className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-              <Video className="w-4 h-4 text-blue-600" />
-              {t('Host Remedial Workshop', 'Host Remedial Workshop')}
-            </DialogTitle>
+            <DialogTitle className="text-base font-bold">Schedule Remedial Live Workshop</DialogTitle>
             <DialogDescription className="text-xs text-slate-500">
-              Host an interactive live session to resolve the <strong className="text-blue-600">{selectedDemand?.skillName}</strong> skill gap for {selectedDemand?.traineeCount} interested trainees.
+              Host interactive video clinic for trainees diagnosed with {selectedDemand?.skillName || 'gaps'}.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleLaunchWorkshop} className="space-y-3 pt-2">
-            <div className="space-y-1">
-              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Workshop Title', 'Workshop Title')}</label>
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Workshop Title</label>
               <Input 
-                value={workshopTitle} 
-                onChange={(e) => setWorkshopTitle(e.target.value)} 
-                placeholder="e.g. Mastering Binary Trees & Graph Traversal" 
-                className="text-xs rounded-xl"
+                value={workshopTitle}
+                onChange={e => setWorkshopTitle(e.target.value)}
                 required
+                className="text-xs rounded-xl h-9"
               />
             </div>
 
             <div className="grid grid-cols-2 gap-3">
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Date & Time', 'Date & Time')}</label>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Date & Time</label>
                 <Input 
-                  value={workshopDate} 
-                  onChange={(e) => setWorkshopDate(e.target.value)} 
-                  placeholder="e.g. Tomorrow, 4:00 PM IST" 
-                  className="text-xs rounded-xl"
-                  required
+                  value={workshopDate}
+                  onChange={e => setWorkshopDate(e.target.value)}
+                  className="text-xs rounded-xl h-9"
                 />
               </div>
-
-              <div className="space-y-1">
-                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">{t('Seat Capacity', 'Seat Capacity')}</label>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Seat Capacity</label>
                 <Input 
                   type="number"
-                  value={workshopMaxCapacity} 
-                  onChange={(e) => setWorkshopMaxCapacity(parseInt(e.target.value) || 30)} 
-                  className="text-xs rounded-xl"
-                  min={5}
-                  max={100}
+                  value={workshopMaxCapacity}
+                  onChange={e => setWorkshopMaxCapacity(parseInt(e.target.value) || 30)}
+                  className="text-xs rounded-xl h-9"
                 />
               </div>
             </div>
 
-            <div className="p-3 bg-blue-50 dark:bg-blue-950/40 rounded-xl border border-blue-200/60 dark:border-blue-900/60 text-xs text-blue-700 dark:text-blue-300">
-              ✓ Automated notifications will be sent to all trainees diagnosed with this skill gap.
-            </div>
-
-            <div className="flex justify-end gap-2 pt-2">
-              <Button type="button" variant="outline" size="sm" onClick={() => setWorkshopModalOpen(false)} className="rounded-xl text-xs">
-                {t('Cancel', 'Cancel')}
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" variant="ghost" onClick={() => setWorkshopModalOpen(false)} className="text-xs h-9">
+                Cancel
               </Button>
-              <Button type="submit" size="sm" className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-semibold">
-                {t('Schedule & Announce Workshop', 'Schedule & Announce Workshop')}
+              <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 font-semibold rounded-xl">
+                Schedule & Notify Trainees
               </Button>
             </div>
           </form>
