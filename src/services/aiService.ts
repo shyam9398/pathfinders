@@ -1,5 +1,6 @@
 import { Language } from '@/types';
 import { supabase } from '@/integrations/supabase/client';
+import { analyzeResumeLocally } from '@/utils/resumeAnalyzer';
 
 // AI Service for handling resume analysis, roadmap generation, and chat functionality
 interface AIServiceResponse {
@@ -84,7 +85,7 @@ For roadmap generation:
       console.error('Error analyzing resume:', error);
       
       // Fallback response in case of API failure
-      return this.getFallbackResumeAnalysis(request.language);
+      return this.getFallbackResumeAnalysis(request.language, request.resumeText, request.targetRole);
     }
   }
 
@@ -162,7 +163,16 @@ For roadmap generation:
     }
   }
 
-  private getFallbackResumeAnalysis(language: Language): AIServiceResponse {
+  private getFallbackResumeAnalysis(language: Language, resumeText?: string, targetRole?: string): AIServiceResponse {
+    if (resumeText && resumeText.trim().length >= 30) {
+      const local = analyzeResumeLocally(resumeText, language, targetRole);
+      return {
+        structuredData: local.analysis,
+        localizedText: local.explanation,
+        originalResponse: local.rawResponse
+      };
+    }
+
     const fallbackData = {
       en: {
         structuredData: {

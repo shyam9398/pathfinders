@@ -1,6 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { capacityStore } from '@/services/capacityStore';
+import { toast } from 'sonner';
 import { ResumeUploader } from '@/components/ResumeUploader';
 import { CareerScoreDisplay } from '@/components/CareerScoreDisplay';
 import { RoadmapGenerator } from '@/components/RoadmapGenerator';
@@ -12,6 +15,7 @@ import Navbar from '@/components/Navigation/Navbar';
 
 export default function ResumeAnalyzer() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [analysis, setAnalysis] = useState<any>(null);
   const [roadmap, setRoadmap] = useState<any>(null);

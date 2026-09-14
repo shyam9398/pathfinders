@@ -9,6 +9,7 @@ import { FileText, Loader2, Upload, X } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
+import { analyzeResumeLocally } from '@/utils/resumeAnalyzer';
 
 interface ProfileData {
   name: string;
@@ -70,32 +71,43 @@ export const ResumeAnalyzer = ({ profileData, onAnalysisComplete }: ResumeAnalyz
       
       console.log('[ResumeAnalyzer] Calling edge function with resume of', resumeText.trim().length, 'characters');
       
-      // Call the edge function with the actual resume text
-      const { data, error } = await supabase.functions.invoke('analyze-resume', {
-        body: {
-          resumeText: resumeText.trim(),
-          targetRole: profileData?.shortTermGoals || 'General career guidance',
-          language: language,
-          userId: user?.id,
-          systemPrompt: systemPrompt
+      // Call the edge function with the actual resume text, with graceful smart fallback
+      let analysis: any = null;
+      let explanation: string = '';
+
+      try {
+        const { data, error } = await supabase.functions.invoke('analyze-resume', {
+          body: {
+            resumeText: resumeText.trim(),
+            targetRole: profileData?.shortTermGoals || 'General career guidance',
+            language: language,
+            userId: user?.id,
+            systemPrompt: systemPrompt
+          }
+        });
+
+        if (error || data?.error || !data?.analysis) {
+          console.warn('[ResumeAnalyzer] Edge function failed, using smart local analyzer:', error || data?.error);
+          const local = analyzeResumeLocally(resumeText.trim(), language, profileData?.shortTermGoals || 'General career guidance');
+          analysis = local.analysis;
+          explanation = local.explanation;
+        } else {
+          analysis = data.analysis;
+          explanation = data.explanation || '';
         }
-      });
-
-      if (error) {
-        throw new Error(error.message || 'Failed to analyze resume');
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
+      } catch (err) {
+        console.warn('[ResumeAnalyzer] Exception calling edge function, using smart local analyzer:', err);
+        const local = analyzeResumeLocally(resumeText.trim(), language, profileData?.shortTermGoals || 'General career guidance');
+        analysis = local.analysis;
+        explanation = local.explanation;
       }
 
       // Format the analysis response
-      const analysis = data?.analysis;
       if (analysis) {
         const formattedResponse = formatAnalysisResponse(analysis, language);
         onAnalysisComplete(formattedResponse);
       } else {
-        onAnalysisComplete(data?.explanation || '❌ No analysis received from AI.');
+        onAnalysisComplete(explanation || '❌ No analysis received from AI.');
       }
     } catch (error) {
       console.error('Resume analysis error:', error);

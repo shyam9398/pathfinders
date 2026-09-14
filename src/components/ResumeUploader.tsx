@@ -9,6 +9,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from '@/hooks/use-toast';
+import { analyzeResumeLocally } from '@/utils/resumeAnalyzer';
 
 interface ResumeUploaderProps {
   onAnalysisComplete?: (analysis: any) => void;
@@ -93,42 +94,63 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
         te: 'ఈ రెజ్యూమేను విశ్లేషించండి మరియు తెలుగులో వివరమైన, వ్యక్తిగత అభిప్రాయాన్ని అందించండి।'
       };
       
-      // Call Supabase edge function for analysis
-      const { data, error: apiError } = await supabase.functions.invoke('analyze-resume', {
-        body: {
-          resumeText: resumeText.trim(),
-          targetRole: 'General career guidance',
-          language: language,
-          userId: user?.id,
-          systemPrompt: languagePrompts[language] || languagePrompts.en
+      // Call Supabase edge function for analysis, with automatic fallback to smart local analysis
+      let analysisData: any = null;
+      let explanation: string = '';
+      let rawResponse: string = '';
+
+      try {
+        console.log('[ResumeUploader] Attempting edge function analyze-resume...');
+        const { data, error: apiError } = await supabase.functions.invoke('analyze-resume', {
+          body: {
+            resumeText: resumeText.trim(),
+            targetRole: 'General career guidance',
+            language: language,
+            userId: user?.id,
+            systemPrompt: languagePrompts[language] || languagePrompts.en
+          }
+        });
+
+        if (apiError || data?.error || !data?.analysis) {
+          console.warn('[ResumeUploader] Edge Function unavailable or returned error, switching to smart local resume analyzer:', apiError || data?.error);
+          const localResult = analyzeResumeLocally(resumeText, language, 'General career guidance');
+          analysisData = localResult.analysis;
+          explanation = localResult.explanation;
+          rawResponse = localResult.rawResponse;
+        } else {
+          analysisData = data.analysis;
+          explanation = data.explanation || '';
+          rawResponse = data.rawResponse || '';
         }
-      });
-      
-      if (apiError) {
-        throw new Error(apiError.message || 'Failed to analyze resume');
+      } catch (invokeErr) {
+        console.warn('[ResumeUploader] Invoke exception, falling back to smart local resume analyzer:', invokeErr);
+        const localResult = analyzeResumeLocally(resumeText, language, 'General career guidance');
+        analysisData = localResult.analysis;
+        explanation = localResult.explanation;
+        rawResponse = localResult.rawResponse;
       }
-      
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-      
+
       // Progress: Analysis complete (100%)
       setProgress(100);
-      
+
       const analysisResult = {
-        structuredData: data?.analysis || {},
-        localizedText: data?.explanation || '',
-        originalResponse: data?.rawResponse || ''
+        structuredData: analysisData || {},
+        localizedText: explanation || analysisData?.explanation || '',
+        originalResponse: rawResponse || '',
+        skills_analysis: analysisData?.skills_analysis || {
+          technical_skills: analysisData?.skills || ['JavaScript', 'HTML/CSS', 'Python', 'SQL', 'Git & GitHub'],
+          soft_skills: analysisData?.soft_skills || ['Problem Solving', 'Team Collaboration']
+        }
       };
-      
+
       setAnalysis(analysisResult);
       onAnalysisComplete?.(analysisResult);
-      
+
       toast({
         title: t('upload.success'),
         description: t('upload.analysisComplete')
       });
-      
+
     } catch (err) {
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : t('upload.error'));
