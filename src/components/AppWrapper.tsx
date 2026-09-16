@@ -12,13 +12,45 @@ const AppWrapper: React.FC<AppWrapperProps> = ({ children }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading: authLoading } = useAuth();
-  const { isLoading: languageLoading } = useLanguage();
+  const { language, isLoading: languageLoading } = useLanguage();
   const [showLanguageSelector, setShowLanguageSelector] = useState(() => {
     if (typeof window === 'undefined') return false;
     // Show choose language before home on initial session launch
     const sessionLangChosen = sessionStorage.getItem('pf_session_lang_selected');
     return !sessionLangChosen;
   });
+
+  // Ensure all features and page navigations open at the top of the page
+  useEffect(() => {
+    if ('scrollRestoration' in window.history) {
+      window.history.scrollRestoration = 'manual';
+    }
+
+    const scrollToTop = () => {
+      window.scrollTo({ top: 0, left: 0, behavior: 'instant' as ScrollBehavior });
+      if (document.documentElement) {
+        document.documentElement.scrollTop = 0;
+      }
+      if (document.body) {
+        document.body.scrollTop = 0;
+      }
+      const scrollables = document.querySelectorAll(
+        'main, [class*="overflow-y-auto"], [class*="overflow-auto"], #root'
+      );
+      scrollables.forEach((el) => {
+        el.scrollTop = 0;
+      });
+    };
+
+    scrollToTop();
+    const frameId = requestAnimationFrame(scrollToTop);
+    const timerId = setTimeout(scrollToTop, 60);
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      clearTimeout(timerId);
+    };
+  }, [location.pathname, location.search]);
 
   const handleLanguageComplete = () => {
     setShowLanguageSelector(false);
@@ -49,7 +81,7 @@ const AppWrapper: React.FC<AppWrapperProps> = ({ children }) => {
   }
 
   // Render main app
-  return <>{children}</>;
+  return <div key={"app-lang-" + language} className="contents">{children}</div>;
 };
 
 export default AppWrapper;

@@ -2786,7 +2786,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                       {/* Why You Match Section */}
                       <div className="bg-slate-50/80 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800">
                         <span className="text-[11px] font-bold text-slate-700 dark:text-slate-300 block mb-1.5">
-                          Why you match:
+                          {t('Why you match:', 'Why you match:')}
                         </span>
                         <div className="space-y-1">
                           {career.whyMatches?.slice(0, 3).map((reason, rIdx) => (
@@ -2801,8 +2801,8 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                       {/* Important Skills */}
                       <div>
                         <div className="flex items-center justify-between text-[11px] text-slate-500 mb-1.5">
-                          <span className="font-semibold">Key Skills:</span>
-                          <span>Skill gap: <strong>{gap.missingList.length} skills</strong></span>
+                          <span className="font-semibold">{t('Key Skills:', 'Key Skills:')}</span>
+                          <span>{t('Skill gap:', 'Skill gap:')} <strong>{gap.missingList.length} {t('skills', 'skills')}</strong></span>
                         </div>
                         <div className="flex flex-wrap items-center gap-1.5">
                           {career.required_skills.slice(0, 5).map((skill, sIdx) => {
@@ -2829,7 +2829,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                                     className="text-[10px] px-1.5 py-0.5 rounded-md bg-blue-50 text-blue-700 hover:bg-blue-600 hover:text-white border border-blue-200 dark:bg-blue-950 dark:border-blue-800 font-bold transition-colors"
                                     title={`Find verified trainers teaching ${skill}`}
                                   >
-                                    Match Trainer
+                                    {t('Match Trainer', 'Match Trainer')}
                                   </button>
                                 )}
                               </div>
@@ -2854,7 +2854,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                           }`}
                         >
                           <Heart className={`w-3.5 h-3.5 mr-1 ${isSaved ? 'fill-rose-600' : ''}`} />
-                          {isSaved ? 'Saved' : 'Save'}
+                          {isSaved ? t('Saved', 'Saved') : t('Save', 'Save')}
                         </Button>
 
                         <Button
@@ -2868,7 +2868,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                           }`}
                         >
                           <SlidersHorizontal className="w-3.5 h-3.5 mr-1" />
-                          {isCompared ? 'Comparing' : 'Compare'}
+                          {isCompared ? t('Comparing', 'Comparing') : t('Compare', 'Compare')}
                         </Button>
                       </div>
 
@@ -2880,7 +2880,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                         }}
                         className="bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-8 px-3.5 text-xs font-semibold shadow-2xs"
                       >
-                        <span>View Career Path</span>
+                        <span>{t('View Career Path', 'View Career Path')}</span>
                         <ArrowRight className="w-3.5 h-3.5 ml-1.5" />
                       </Button>
                     </div>
@@ -2903,26 +2903,26 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                 <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
                   {careerStage === 'student'
                     ? academicYear === '1st Year'
-                      ? 'Foundational Capstone Projects & Skill Building for 1st Year Students'
-                      : `Recommended Internships & Campus Drives for ${academicYear} Students`
-                    : `Recommended Lateral Career Transitions (${experienceLevel})`}
+                      ? t('Foundational Capstone Projects & Skill Building for 1st Year Students', 'Foundational Capstone Projects & Skill Building for 1st Year Students')
+                      : `${t('Recommended Internships & Campus Drives', 'Recommended Internships & Campus Drives')} (${academicYear})`
+                    : `${t('Recommended Lateral Career Transitions', 'Recommended Lateral Career Transitions')} (${experienceLevel})`}
                 </h2>
                 <Badge className={`${academicYear === '1st Year' && careerStage === 'student' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'} text-xs font-bold`}>
-                  {academicYear === '1st Year' && careerStage === 'student' ? 'Foundational Phase' : 'Verified Matches'}
+                  {academicYear === '1st Year' && careerStage === 'student' ? t('Foundational Phase', 'Foundational Phase') : t('Verified Matches', 'Verified Matches')}
                 </Badge>
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 {careerStage === 'student'
                   ? academicYear === '1st Year'
-                    ? 'Corporate internships officially commence from 2nd year onwards. Complete these foundational capstone tracks and algorithmic milestones now to qualify for tier-1 internships next year.'
-                    : `Curated based on your verified skills and academic progression (${academicYear}). Apply directly to boost your real-world credentials.`
+                    ? t('Corporate internships officially commence from 2nd year onwards. Complete these foundational capstone tracks and algorithmic milestones now to qualify for tier-1 internships next year.', 'Corporate internships officially commence from 2nd year onwards. Complete these foundational capstone tracks and algorithmic milestones now to qualify for tier-1 internships next year.')
+                    : t('Curated based on your verified skills and academic progression (final year). apply directly to boost your real-world credentials.', `Curated based on your verified skills and academic progression (${academicYear}). Apply directly to boost your real-world credentials.`)
                   : `Curated opportunities matching your technical skills and ${experienceLevel} industry experience.`}
               </p>
             </div>
 
             <div className="flex items-center gap-2">
               <Badge variant="outline" className="text-xs bg-slate-50 dark:bg-slate-800 border-slate-200 text-slate-600 font-semibold px-2.5 py-1">
-                {recommendedOpportunities.length} Active Positions
+                {recommendedOpportunities.length} {t('Active Positions', 'Active Positions')}
               </Badge>
             </div>
           </div>
@@ -2949,7 +2949,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                     </div>
 
                     <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[11px] font-extrabold px-2 py-0.5">
-                      {opp.matchScore}% Match
+                      {opp.matchScore}% {t('Match', 'Match')}
                     </Badge>
                   </div>
 
@@ -2969,13 +2969,13 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                   {/* Compensation & Duration */}
                   <div className="p-2.5 rounded-xl bg-white dark:bg-slate-900/80 border border-slate-200/60 dark:border-slate-800 flex items-center justify-between text-xs">
                     <div>
-                      <span className="text-[10px] text-slate-400 block font-medium">Stipend / CTC</span>
+                      <span className="text-[10px] text-slate-400 block font-medium">{t('Stipend / CTC', 'Stipend / CTC')}</span>
                       <strong className="text-emerald-600 dark:text-emerald-400 font-extrabold text-xs">
                         {opp.stipend}
                       </strong>
                     </div>
                     <div className="text-right">
-                      <span className="text-[10px] text-slate-400 block font-medium">Duration</span>
+                      <span className="text-[10px] text-slate-400 block font-medium">{t('Duration', 'Duration')}</span>
                       <span className="font-semibold text-slate-700 dark:text-slate-300 text-xs">
                         {opp.duration}
                       </span>
@@ -3010,7 +3010,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                     }}
                     className="w-full bg-blue-600 hover:bg-blue-700 text-white rounded-xl h-9 text-xs font-bold shadow-xs flex items-center justify-center gap-1.5"
                   >
-                    <span>Apply / View Details</span>
+                    <span>{t('Apply / View Details', 'Apply / View Details')}</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </Button>
                 </div>

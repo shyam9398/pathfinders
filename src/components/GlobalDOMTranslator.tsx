@@ -2,8 +2,39 @@ import React, { useEffect, useRef } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { phraseDictionary, singleWordDictionary } from '@/i18n/phraseDictionary';
 
-// WeakMap to store original English text nodes so they can be restored accurately when toggling back to English
 const originalTextMap = new WeakMap<Node, string>();
+
+const escapeRegExp = (str: string) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const allDictionaryKeys = Object.keys(phraseDictionary).sort((a, b) => b.length - a.length);
+const allWordKeys = Object.keys(singleWordDictionary).sort((a, b) => b.length - a.length);
+
+// Bidirectional Reverse Lookup: Hindi/Telugu -> English
+const reverseDictionary: Record<string, string> = {};
+
+for (const [enKey, translations] of Object.entries(phraseDictionary)) {
+  if (translations.hi) {
+    reverseDictionary[translations.hi.trim().toLowerCase()] = enKey;
+  }
+  if (translations.te) {
+    reverseDictionary[translations.te.trim().toLowerCase()] = enKey;
+  }
+}
+
+for (const [enKey, translations] of Object.entries(singleWordDictionary)) {
+  if (translations.hi) {
+    reverseDictionary[translations.hi.trim().toLowerCase()] = enKey;
+  }
+  if (translations.te) {
+    reverseDictionary[translations.te.trim().toLowerCase()] = enKey;
+  }
+}
+
+const allReverseKeys = Object.keys(reverseDictionary).sort((a, b) => b.length - a.length);
+
+const toTitleCase = (str: string): string => {
+  return str.replace(/\w\S*/g, (txt) => txt.charAt(0).toUpperCase() + txt.substring(1).toLowerCase());
+};
 
 export const GlobalDOMTranslator: React.FC = () => {
   const { language } = useLanguage();
@@ -12,71 +43,74 @@ export const GlobalDOMTranslator: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
-    const translateNode = (node: Node, lang: 'hi' | 'te') => {
-      // Only process Text nodes with meaningful content
+    const isIndic = (text: string) => /[\u0900-\u097F\u0C00-\u0C7F]/.test(text);
+
+    const translateNodeToIndic = (node: Node, lang: 'hi' | 'te') => {
       if (node.nodeType !== Node.TEXT_NODE) return;
       const text = node.nodeValue;
       if (!text || text.trim().length <= 1) return;
-
-      // Don't translate pure numbers or symbols
       if (/^[\d\s.,:%()#+-]+$/.test(text.trim())) return;
 
-      // Don't translate inside code, style, script, input, textarea
       const parent = node.parentElement;
       if (!parent) return;
       const tagName = parent.tagName.toLowerCase();
       if (['script', 'style', 'code', 'pre', 'textarea', 'input'].includes(tagName)) return;
       if (parent.isContentEditable) return;
 
-      // Cache original text once
-      if (!originalTextMap.has(node)) {
+      if (!originalTextMap.has(node) && !isIndic(text)) {
         originalTextMap.set(node, text);
       }
 
-      const original = originalTextMap.get(node) || text;
+      const original = (originalTextMap.has(node) && !isIndic(originalTextMap.get(node)!))
+        ? originalTextMap.get(node)!
+        : text;
+
       const cleanOriginal = original.trim().toLowerCase();
+      const leadingWhitespace = original.match(/^\s*/)?.[0] || '';
+      const trailingWhitespace = original.match(/\s*$/)?.[0] || '';
+      const trimmed = original.trim();
 
-      // 1. Direct phrase lookup
-      if (phraseDictionary[cleanOriginal] && phraseDictionary[cleanOriginal][lang]) {
-        const translated = phraseDictionary[cleanOriginal][lang];
-        // Preserve surrounding whitespaces
-        const leading = original.match(/^\s*/)?.[0] || '';
-        const trailing = original.match(/\s*$/)?.[0] || '';
-        node.nodeValue = leading + translated + trailing;
+      const leadingPunctMatch = trimmed.match(/^[^a-zA-Z0-9\s]+/);
+      const leadingPunct = leadingPunctMatch ? leadingPunctMatch[0] : '';
+      const afterLeading = trimmed.slice(leadingPunct.length);
+
+      const trailingPunctMatch = afterLeading.match(/[^a-zA-Z0-9\s]+$/);
+      const trailingPunct = trailingPunctMatch ? trailingPunctMatch[0] : '';
+      const core = afterLeading.slice(0, afterLeading.length - trailingPunct.length).trim();
+      const cleanCore = core.toLowerCase();
+
+      if (phraseDictionary[cleanOriginal]?.[lang]) {
+        node.nodeValue = leadingWhitespace + phraseDictionary[cleanOriginal][lang] + trailingWhitespace;
         return;
       }
 
-      // 2. Direct single word lookup
-      if (singleWordDictionary[cleanOriginal] && singleWordDictionary[cleanOriginal][lang]) {
-        const translated = singleWordDictionary[cleanOriginal][lang];
-        const leading = original.match(/^\s*/)?.[0] || '';
-        const trailing = original.match(/\s*$/)?.[0] || '';
-        node.nodeValue = leading + translated + trailing;
+      if (cleanCore && phraseDictionary[cleanCore]?.[lang]) {
+        node.nodeValue = leadingWhitespace + leadingPunct + phraseDictionary[cleanCore][lang] + trailingPunct + trailingWhitespace;
         return;
       }
 
-      // 3. Multi-phrase replacement inside longer sentences
+      if (singleWordDictionary[cleanOriginal]?.[lang]) {
+        node.nodeValue = leadingWhitespace + singleWordDictionary[cleanOriginal][lang] + trailingWhitespace;
+        return;
+      }
+
+      if (cleanCore && singleWordDictionary[cleanCore]?.[lang]) {
+        node.nodeValue = leadingWhitespace + leadingPunct + singleWordDictionary[cleanCore][lang] + trailingPunct + trailingWhitespace;
+        return;
+      }
+
       let workingText = original;
       let hasReplaced = false;
 
-      // Check common high-frequency phrases
-      const commonPhrases = [
-        "pathfinders", "pathfinder", "apply to become a trainer", "your request is processing",
-        "student portal", "trainer portal", "admin portal", "sign in", "sign up", "create account",
-        "get started free", "analyze resume", "career growth path", "career growth pathways",
-        "career guide", "skill gap engine", "competency mapping", "preview mode",
-        "software engineer", "data analyst", "product manager", "ui/ux designer",
-        "take assessment now", "active courses", "trainees enrolled", "verified by pathfinders",
-        "ats-optimized templates", "multilingual support", "personalized roadmaps"
-      ];
-
-      for (const phrase of commonPhrases) {
-        if (workingText.toLowerCase().includes(phrase)) {
+      for (const phrase of allDictionaryKeys) {
+        if (phrase.length >= 3 && workingText.toLowerCase().includes(phrase)) {
           const trans = phraseDictionary[phrase]?.[lang];
           if (trans) {
-            const regex = new RegExp(phrase, 'gi');
-            workingText = workingText.replace(regex, trans);
-            hasReplaced = true;
+            const regex = new RegExp('\\b' + escapeRegExp(phrase) + '\\b', 'gi');
+            if (regex.test(workingText)) {
+              workingText = workingText.replace(regex, trans);
+              hasReplaced = true;
+            }
           }
         }
       }
@@ -86,9 +120,48 @@ export const GlobalDOMTranslator: React.FC = () => {
       }
     };
 
-    const restoreNode = (node: Node) => {
-      if (node.nodeType === Node.TEXT_NODE && originalTextMap.has(node)) {
-        node.nodeValue = originalTextMap.get(node)!;
+    const translateNodeToEnglish = (node: Node) => {
+      if (node.nodeType !== Node.TEXT_NODE) return;
+      const text = node.nodeValue;
+      if (!text || text.trim().length <= 1) return;
+
+      if (originalTextMap.has(node)) {
+        const cached = originalTextMap.get(node)!;
+        if (!isIndic(cached)) {
+          node.nodeValue = cached;
+          return;
+        }
+      }
+
+      if (isIndic(text)) {
+        const leadingWhitespace = text.match(/^\s*/)?.[0] || '';
+        const trailingWhitespace = text.match(/\s*$/)?.[0] || '';
+        const cleanText = text.trim().toLowerCase();
+
+        if (reverseDictionary[cleanText]) {
+          const en = toTitleCase(reverseDictionary[cleanText]);
+          node.nodeValue = leadingWhitespace + en + trailingWhitespace;
+          originalTextMap.set(node, node.nodeValue);
+          return;
+        }
+
+        let working = text;
+        let hasReplaced = false;
+        for (const indicKey of allReverseKeys) {
+          if (indicKey.length >= 2 && working.toLowerCase().includes(indicKey)) {
+            const en = reverseDictionary[indicKey];
+            if (en) {
+              const regex = new RegExp(escapeRegExp(indicKey), 'gi');
+              working = working.replace(regex, toTitleCase(en));
+              hasReplaced = true;
+            }
+          }
+        }
+
+        if (hasReplaced) {
+          node.nodeValue = working;
+          originalTextMap.set(node, working);
+        }
       }
     };
 
@@ -101,22 +174,20 @@ export const GlobalDOMTranslator: React.FC = () => {
       }
     };
 
-    // If English, restore original texts
+    const root = document.getElementById('root') || document.body;
+
     if (language === 'en') {
-      const root = document.getElementById('root') || document.body;
-      walk(root, restoreNode);
+      walk(root, translateNodeToEnglish);
       if (observerRef.current) {
         observerRef.current.disconnect();
       }
       return;
     }
 
-    // If Hindi or Telugu, translate initial DOM
     const activeLang = language as 'hi' | 'te';
-    const root = document.getElementById('root') || document.body;
-    walk(root, (node) => translateNode(node, activeLang));
+    walk(root, translateNodeToEnglish);
+    walk(root, (node) => translateNodeToIndic(node, activeLang));
 
-    // Throttled mutation observer for dynamic elements & page transitions
     let timeout: any = null;
     const observer = new MutationObserver((mutations) => {
       if (timeout) clearTimeout(timeout);
@@ -124,10 +195,8 @@ export const GlobalDOMTranslator: React.FC = () => {
         for (const mutation of mutations) {
           if (mutation.type === 'childList') {
             mutation.addedNodes.forEach((node) => {
-              walk(node, (n) => translateNode(n, activeLang));
+              walk(node, (n) => translateNodeToIndic(n, activeLang));
             });
-          } else if (mutation.type === 'characterData' && mutation.target) {
-            translateNode(mutation.target, activeLang);
           }
         }
       }, 150);
@@ -136,7 +205,6 @@ export const GlobalDOMTranslator: React.FC = () => {
     observer.observe(root, {
       childList: true,
       subtree: true,
-      characterData: true
     });
 
     observerRef.current = observer;

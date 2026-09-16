@@ -64,7 +64,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   const navigate = useNavigate();
   const location = useLocation();
   const { user, role, setRole, signOut } = useAuth();
-  const { t } = useLanguage();
+  const { t, language } = useLanguage();
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   // Persistent Collapsed/Expanded Sidebar State
@@ -93,17 +93,17 @@ export const Navbar: React.FC<NavbarProps> = ({
 
   // 12 Required Sidebar Navigation Items for Trainee / Student
   const traineeNavItems = [
-    { label: t('Dashboard', 'Dashboard'), path: '/main', icon: LayoutDashboard },
-    { label: t('Career Guidance', 'Career Guidance'), path: '/career-guide', icon: Brain },
-    { label: t('Resume Analyzer', 'Resume Analyzer'), path: '/resume-analyzer', icon: FileText },
-    { label: t('Career Growth Path', 'Career Growth Path'), path: '/career-growth', icon: Rocket },
-    { label: t('Career Health', 'Career Health'), path: '/career-health', icon: Heart },
-    { label: t('Career Updates', 'Career Updates'), path: '/career-updates', icon: Sparkles },
-    { label: t('Courses', 'Courses'), path: '/courses', icon: BookOpen },
-    { label: t('Trainers', 'Trainers'), path: '/trainers', icon: Users },
-    { label: t('Achievements', 'Achievements'), path: '/achievements', icon: Trophy },
-    { label: t('Profile', 'Profile'), path: '/profile', icon: User },
-    { label: t('Settings', 'Settings'), path: '/settings', icon: Settings },
+    { label: language === 'en' ? 'Dashboard' : t('Dashboard', 'Dashboard'), path: '/main', icon: LayoutDashboard },
+    { label: language === 'en' ? 'Career Guidance' : t('Career Guidance', 'Career Guidance'), path: '/career-guide', icon: Brain },
+    { label: language === 'en' ? 'Resume Analyzer' : t('Resume Analyzer', 'Resume Analyzer'), path: '/resume-analyzer', icon: FileText },
+    { label: language === 'en' ? 'Career Growth Path' : t('Career Growth Path', 'Career Growth Path'), path: '/career-growth', icon: Rocket },
+    { label: language === 'en' ? 'Career Health' : t('Career Health', 'Career Health'), path: '/career-health', icon: Heart },
+    { label: language === 'en' ? 'Career Updates' : t('Career Updates', 'Career Updates'), path: '/career-updates', icon: Sparkles },
+    { label: language === 'en' ? 'Courses' : t('Courses', 'Courses'), path: '/courses', icon: BookOpen },
+    { label: language === 'en' ? 'Trainers' : t('Trainers', 'Trainers'), path: '/trainers', icon: Users },
+    { label: language === 'en' ? 'Achievements' : t('Achievements', 'Achievements'), path: '/achievements', icon: Trophy },
+    { label: language === 'en' ? 'Profile' : t('Profile', 'Profile'), path: '/profile', icon: User },
+    { label: language === 'en' ? 'Settings' : t('Settings', 'Settings'), path: '/settings', icon: Settings },
   ];
 
   const trainerNavItems = [

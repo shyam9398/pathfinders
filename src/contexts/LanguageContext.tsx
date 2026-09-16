@@ -75,12 +75,8 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
         }).catch(() => {});
       } catch (e) {}
 
-      // Clean reload on language switch to completely purge any mutated text nodes
-      if (prevLang && prevLang !== lang) {
-        setTimeout(() => {
-          window.location.reload();
-        }, 80);
-      }
+      localStorage.setItem('user_language', lang);
+      // Language updated instantly in-place without page reload to keep student logged in
     }
   };
 

@@ -62,6 +62,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
+  // Synchronize language without logging out
+  useEffect(() => {
+    const handleGlobalLangChange = (e: any) => {
+      const newLang = e?.detail?.language;
+      if (newLang) {
+        setUser(prev => (prev ? { ...prev, language: newLang } : null));
+      }
+    };
+    window.addEventListener('languageChange', handleGlobalLangChange);
+    return () => window.removeEventListener('languageChange', handleGlobalLangChange);
+  }, []);
+
   const setRole = (newRole: UserRole) => {
     capacityStore.setActiveRole(newRole);
     setRoleState(newRole);
