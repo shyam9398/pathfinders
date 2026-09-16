@@ -573,63 +573,6 @@ const AuthPage = () => {
                       {isLoading ? (t('common.loading', 'Verifying...')) : (t('auth.loginButton', 'Sign In'))}
                     </Button>
                   </form>
-
-                  {/* One-Click Quick Sign In Helpers */}
-                  <div className="relative my-3">
-                    <div className="absolute inset-0 flex items-center">
-                      <div className="w-full border-t border-slate-200 dark:border-slate-800" />
-                    </div>
-                    <div className="relative flex justify-center text-[10px] uppercase">
-                      <span className="bg-white dark:bg-slate-900 px-2 text-slate-400 font-semibold">
-                        Instant 1-Click Access
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="grid grid-cols-1 gap-2">
-                    {selectedRole === 'trainee' && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          loginAsTrainee({ name: 'Pavan Kumar (Trainee)', email: 'trainee@pathfinder.org' });
-                          navigate('/main');
-                        }}
-                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:text-blue-600 font-semibold"
-                      >
-                        🎓 Instant Sign In as Trainee (trainee / 123456)
-                      </Button>
-                    )}
-                    {selectedRole === 'trainer' && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          loginAsTrainer({ name: 'Dr. Priya Sharma (Trainer)', email: 'trainer@pathfinder.org' });
-                          navigate('/trainer');
-                        }}
-                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600 font-semibold"
-                      >
-                        👨‍🏫 Instant Sign In as Trainer (trainer / 123456)
-                      </Button>
-                    )}
-                    {selectedRole === 'admin' && (
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          loginAsAdmin();
-                          navigate('/admin');
-                        }}
-                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-purple-500 hover:text-purple-600 font-semibold"
-                      >
-                        🛡️ Instant Sign In as Admin (pathfinder / 123456)
-                      </Button>
-                    )}
-                  </div>
                 </TabsContent>
 
                 {/* Sign Up Form */}
