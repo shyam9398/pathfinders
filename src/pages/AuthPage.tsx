@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { TrainerApplicationModal } from '@/components/TrainerApplicationModal';
 import { capacityStore } from '@/services/capacityStore';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const AuthPage = () => {
   const { signIn, signUp, loginAsGuest, setRole, loading } = useAuth();
@@ -204,86 +205,81 @@ const AuthPage = () => {
 
     try {
       // -------------------------------------------------------------
-      // 1. ADMIN ROLE: Strict verification from Supabase
+      // 1. ADMIN ROLE: Native Supabase Authentication & Profile Role Verification
       // -------------------------------------------------------------
       if (selectedRole === 'admin') {
-        let adminVerified = false;
+        let adminEmail = inputIdent;
 
-        // A. Verify via Supabase RPC verify_platform_login
-        try {
-          const { data: rpcData, error: rpcError } = await supabase.rpc('verify_platform_login', {
-            p_identifier: inputIdent,
-            p_password: inputPass,
-            p_role: 'admin'
-          });
-
-          if (!rpcError && rpcData && (rpcData as any).success) {
-            adminVerified = true;
-          } else if (rpcData && !(rpcData as any).success) {
-            // Explicit rejection from Supabase RPC
-            setError((rpcData as any).error || 'Invalid administrator credentials. Access denied.');
-            setIsLoading(false);
-            return;
-          }
-        } catch (e) {
-          console.warn('Supabase RPC admin verification check:', e);
-        }
-
-        // B. If not verified yet, verify against Supabase admin_logins table
-        if (!adminVerified) {
+        // Support username resolution: If input doesn't contain '@', resolve corresponding email from profiles
+        if (!inputIdent.includes('@')) {
           try {
-            const { data: adminRows, error: tableErr } = await supabase
-              .from('admin_logins' as any)
-              .select('*')
-              .or(`username.ilike.${inputIdent},email.ilike.${inputIdent}`)
-              .eq('status', 'active')
-              .limit(1);
+            const { data: profileRow } = await supabase
+              .from('profiles')
+              .select('email')
+              .ilike('username', inputIdent)
+              .maybeSingle();
 
-            if (!tableErr && adminRows && adminRows.length > 0) {
-              const adminRecord = adminRows[0] as any;
-              // Check password
-              if (adminRecord.password_hash === inputPass || adminRecord.password_hash?.length > 0) {
-                // If bcrypt hash is matched via RPC, or plain fallback
-                adminVerified = true;
-              }
+            if (profileRow?.email) {
+              adminEmail = profileRow.email;
+            } else {
+              // Fallback domain format if username was entered directly without resolution
+              adminEmail = `${inputIdent}@pathfinder.org`;
             }
-          } catch (e) {
-            console.warn('Supabase admin_logins query note:', e);
+          } catch (lookupErr) {
+            console.warn('[Admin Auth] Username resolution error:', lookupErr);
           }
         }
 
-        // C. Verify via Supabase native Auth if entered as email
-        if (!adminVerified && inputIdent.includes('@')) {
-          try {
-            const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-              email: inputIdent,
-              password: inputPass
-            });
-            if (!authErr && authData?.user) {
-              const { data: profile } = await supabase
-                .from('profiles')
-                .select('role')
-                .eq('id', authData.user.id)
-                .maybeSingle();
+        // Native Supabase Authentication using email + password
+        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+          email: adminEmail,
+          password: inputPass
+        });
 
-              if (profile?.role === 'admin' || authData.user.user_metadata?.role === 'admin') {
-                adminVerified = true;
-              }
-            }
-          } catch (e) {
-            console.warn('Supabase native auth admin note:', e);
+        if (authError || !authData?.user) {
+          const errMsg = authError?.message || '';
+          if (
+            errMsg.toLowerCase().includes('network') || 
+            errMsg.toLowerCase().includes('fetch') || 
+            errMsg.toLowerCase().includes('failed to connect')
+          ) {
+            setError(t('auth.networkError', 'Unable to connect to the authentication service.'));
+          } else {
+            setError(t('auth.invalidCredentials', 'Invalid email or password.'));
           }
-        }
-
-        if (!adminVerified) {
-          setError('Invalid administrator credentials. Access denied.');
           setIsLoading(false);
           return;
         }
 
-        // Admin successfully verified from Supabase!
+        // Query user's database profile to verify administrative privileges
+        const { data: profile, error: profileErr } = await supabase
+          .from('profiles')
+          .select('id, role, status, full_name')
+          .eq('id', authData.user.id)
+          .maybeSingle();
+
+        const userRole = profile?.role || authData.user.user_metadata?.role;
+
+        // Verify role = 'admin'
+        if (userRole !== 'admin') {
+          // Explicit rejection: non-admin user attempting admin login
+          await supabase.auth.signOut();
+          setError(t('auth.adminRoleMissing', 'You do not have administrator access.'));
+          setIsLoading(false);
+          return;
+        }
+
+        // Verify account approval status
+        if (profile?.status && profile.status !== 'approved' && profile.status !== 'active') {
+          await supabase.auth.signOut();
+          setError(t('auth.adminNotApproved', 'Your administrator account is not approved.'));
+          setIsLoading(false);
+          return;
+        }
+
+        // Admin successfully authenticated & role verified from database!
         setRole('admin');
-        loginAsGuest('admin');
+        toast.success(t('auth.adminLoginSuccess', 'Administrator authenticated successfully.'));
         navigate('/admin', { replace: true });
         setIsLoading(false);
         return;
@@ -383,7 +379,7 @@ const AuthPage = () => {
     } catch (err: any) {
       console.error('Authentication exception:', err);
       if (selectedRole === 'admin') {
-        setError('Failed to authenticate with Supabase server. Please check database connection.');
+        setError(t('auth.networkError', 'Unable to connect to the authentication service.'));
       } else {
         loginAsGuest(selectedRole);
         navigate(selectedRole === 'trainer' ? '/trainer' : '/main', { replace: true });
@@ -738,7 +734,7 @@ const AuthPage = () => {
                       <div className="space-y-1.5">
                         <Label htmlFor="login-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
                           {selectedRole === 'admin' 
-                            ? 'Administrator Username or Email' 
+                            ? t('auth.adminEmailOrUsername', 'Administrator Email or Username') 
                             : selectedRole === 'trainer' 
                             ? 'Trainer Username or Email' 
                             : t('auth.email', 'Email Address')}
@@ -748,7 +744,7 @@ const AuthPage = () => {
                           type="text"
                           placeholder={
                             selectedRole === 'admin'
-                              ? 'Enter admin username or email'
+                              ? 'admin@pathfinder.org or username'
                               : selectedRole === 'trainer'
                               ? 'e.g. your approved username or email'
                               : 'you@example.com'

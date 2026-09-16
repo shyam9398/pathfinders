@@ -37,25 +37,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const createGuestUser = (targetRole: UserRole): User => {
     const lang = (localStorage.getItem('user_language') as Language) || 'en';
+    // Admin role requires authenticated Supabase session - never grant to guest
+    const safeRole: UserRole = targetRole === 'admin' ? 'trainee' : targetRole;
     const names: Record<UserRole, string> = {
       trainee: 'Pavan Kumar (Trainee)',
       trainer: 'Dr. Priya Sharma (Trainer)',
-      admin: 'System Administrator'
+      admin: 'Trainee User'
     };
     return {
       id: 'guest',
-      email: `${targetRole}@pathfinders.org`,
-      name: names[targetRole] || 'Trainee User',
+      email: `${safeRole}@pathfinders.org`,
+      name: names[safeRole] || 'Trainee User',
       language: lang,
-      role: targetRole
+      role: safeRole
     };
   };
 
-  const [role, setRoleState] = useState<UserRole>(getInitialRole);
+  const [role, setRoleState] = useState<UserRole>(() => {
+    const init = getInitialRole();
+    return init === 'admin' ? 'trainee' : init;
+  });
   const [user, setUser] = useState<User | null>(() => {
     const hasRoleSelected = localStorage.getItem('cc_role_selected') === 'true';
     if (hasRoleSelected) {
-      return createGuestUser(getInitialRole());
+      const init = getInitialRole();
+      return createGuestUser(init === 'admin' ? 'trainee' : init);
     }
     return null;
   });
@@ -92,7 +98,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const loginAsGuest = (guestRole?: UserRole) => {
-    const target = guestRole || role || 'trainee';
+    // Admin access cannot be accessed as guest
+    const target = (guestRole === 'admin' ? 'trainee' : guestRole) || (role === 'admin' ? 'trainee' : role) || 'trainee';
     capacityStore.setActiveRole(target);
     setRoleState(target);
     setUser(createGuestUser(target));
@@ -168,26 +175,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const fetchUserProfile = async (userId: string) => {
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
-      const { data, error } = await supabase
-        .from('user_profiles')
-        .select('*')
-        .eq('user_id', userId)
-        .maybeSingle();
+      
+      // 1. Primary: Query public.profiles
+      let profileData: any = null;
+      try {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', userId)
+          .maybeSingle();
+        if (profile) profileData = profile;
+      } catch (err) {
+        console.warn('[AuthContext] profiles lookup note:', err);
+      }
 
-      const metaRole = (authUser?.user_metadata?.role as UserRole) || (data?.role as UserRole);
-      const effectiveRole = metaRole || capacityStore.getActiveRole() || 'trainee';
+      // 2. Fallback: Query public.user_profiles if profiles record does not exist
+      if (!profileData) {
+        try {
+          const { data: userProfile } = await supabase
+            .from('user_profiles')
+            .select('*')
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (userProfile) profileData = userProfile;
+        } catch (err) {
+          console.warn('[AuthContext] user_profiles fallback note:', err);
+        }
+      }
+
+      const rawRole = profileData?.role || authUser?.user_metadata?.role;
+      const mappedRole: UserRole = (rawRole === 'admin') 
+        ? 'admin' 
+        : (rawRole === 'trainer') 
+        ? 'trainer' 
+        : 'trainee';
+
+      const effectiveRole: UserRole = mappedRole || (capacityStore.getActiveRole() === 'admin' ? 'trainee' : capacityStore.getActiveRole()) || 'trainee';
       capacityStore.setActiveRole(effectiveRole);
       setRoleState(effectiveRole);
 
-      if (data) {
-        setUser({
-          id: data.user_id,
-          email: authUser?.email || '',
-          name: data.name,
-          language: (data.language as Language) || 'en',
-          role: effectiveRole
-        });
-      }
+      setUser({
+        id: userId,
+        email: authUser?.email || profileData?.email || '',
+        name: profileData?.full_name || profileData?.name || authUser?.user_metadata?.name || 'User',
+        language: (profileData?.language as Language) || (authUser?.user_metadata?.language as Language) || 'en',
+        role: effectiveRole
+      });
     } catch (error) {
       console.error('Error in fetchUserProfile:', error);
     }
@@ -205,6 +238,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         options: {
           data: {
             name,
+            full_name: name,
             language,
             role: userRole || 'trainee'
           }
@@ -234,12 +268,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const signOut = async () => {
     try {
+      localStorage.removeItem('cc_role_selected');
       const { error } = await supabase.auth.signOut();
-      if (error) throw error;
+      if (error) console.error('SignOut error:', error);
       setUser(null);
       setSession(null);
-      // Keep language preference persistent across sessions as required
-      // Do NOT clear pf_lang_selected on logout
+      setRoleState('trainee');
+      capacityStore.setActiveRole('trainee');
     } catch (error: any) {
       console.error('Error in signOut:', error);
       throw new Error(error.message || 'Failed to sign out');
