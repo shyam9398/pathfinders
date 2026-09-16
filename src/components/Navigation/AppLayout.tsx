@@ -24,7 +24,8 @@ import {
   FolderGit2,
   Settings,
   LogOut,
-  Sparkles
+  Sparkles,
+  Code
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -68,7 +69,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
   const trainerNavItems = [
     { label: 'Trainer Dashboard', path: '/trainer', icon: LayoutDashboard, tag: 'Overview' },
     { label: 'Courses Directory', path: '/courses', icon: BookOpen, tag: 'Curriculum' },
-    { label: 'Trainee Progress', path: '/trainer/trainees', icon: Users, tag: 'Cohorts' },
+    { label: 'Capstone & PR Code Review Arena', path: '/trainer/capstones', icon: Code, tag: 'Reviews' },
     { label: 'Trainer Library', path: '/trainer/library', icon: FolderGit2, tag: 'Materials' },
     { label: 'Assessments', path: '/assessments', icon: CheckSquare, tag: 'Questionnaires' },
     { label: 'Issued Certificates', path: '/certificates', icon: Award, tag: 'Credentials' }
@@ -76,11 +77,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
 
   const adminNavItems = [
     { label: 'Admin Overview', path: '/admin', icon: ShieldCheck, tag: 'Governance' },
-    { label: 'User Directory', path: '/admin/users', icon: Users, tag: 'Approvals' },
     { label: 'Course Catalog', path: '/courses', icon: BookOpen, tag: 'Curriculum' },
     { label: 'Competency Mapping', path: '/skill-gaps', icon: TrendingUp, tag: 'Insights' },
     { label: 'Announcements', path: '/admin/announcements', icon: Bell, tag: 'Broadcast' },
-    { label: 'Analytics & KPIs', path: '/admin/analytics', icon: BarChart3, tag: 'Reports' }
   ];
 
   const navItems = role === 'admin' ? adminNavItems : role === 'trainer' ? trainerNavItems : traineeNavItems;

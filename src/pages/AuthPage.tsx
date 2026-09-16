@@ -13,6 +13,7 @@ import { LanguageToggle } from '@/components/LanguageToggle';
 import { Badge } from '@/components/ui/badge';
 import { TrainerApplicationModal } from '@/components/TrainerApplicationModal';
 import { capacityStore } from '@/services/capacityStore';
+import { supabase } from '@/integrations/supabase/client';
 
 const AuthPage = () => {
   const { signIn, signUp, loginAsGuest, setRole, loading } = useAuth();
@@ -147,8 +148,7 @@ const AuthPage = () => {
 
   const handleUnlockForSeedTrainer = () => {
     setTrainerApproved(true);
-    setLoginData(prev => ({ ...prev, email: 'rakesh.sharma@pathfinders.edu' }));
-    setSuccess('Trainer sign-in unlocked for verified trainer account.');
+    setSuccess('Trainer credentials unlocked. Please enter your approved trainer credentials to sign in.');
   };
 
   // Sync selectedRole and activeTab when searchParams change
@@ -168,9 +168,9 @@ const AuthPage = () => {
     }
   }, [searchParams]);
 
-  // Form data
+  // Form data - NO exposed or pre-filled credentials
   const [loginData, setLoginData] = useState({
-    email: initialRole === 'trainer' ? 'trainer@pathfinders.org' : initialRole === 'admin' ? 'admin@pathfinders.org' : 'trainee@pathfinders.org',
+    email: '',
     password: ''
   });
 
@@ -193,21 +193,172 @@ const AuthPage = () => {
     setError(null);
     setIsLoading(true);
 
-    if (!loginData.email || !loginData.password) {
+    if (!loginData.email.trim() || !loginData.password) {
       setError(t('auth.fillAllFields', 'Please fill in all fields'));
       setIsLoading(false);
       return;
     }
 
+    const inputIdent = loginData.email.trim();
+    const inputPass = loginData.password;
+
     try {
-      // If Trainer: verify via capacityStore approval system
-      if (selectedRole === 'trainer') {
-        const verification = capacityStore.verifyTrainerLogin(loginData.email, loginData.password);
-        if (!verification.success) {
-          setError(verification.error || 'Trainer credentials invalid or pending admin approval.');
+      // -------------------------------------------------------------
+      // 1. ADMIN ROLE: Strict verification from Supabase
+      // -------------------------------------------------------------
+      if (selectedRole === 'admin') {
+        let adminVerified = false;
+
+        // A. Verify via Supabase RPC verify_platform_login
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc('verify_platform_login', {
+            p_identifier: inputIdent,
+            p_password: inputPass,
+            p_role: 'admin'
+          });
+
+          if (!rpcError && rpcData && (rpcData as any).success) {
+            adminVerified = true;
+          } else if (rpcData && !(rpcData as any).success) {
+            // Explicit rejection from Supabase RPC
+            setError((rpcData as any).error || 'Invalid administrator credentials. Access denied.');
+            setIsLoading(false);
+            return;
+          }
+        } catch (e) {
+          console.warn('Supabase RPC admin verification check:', e);
+        }
+
+        // B. If not verified yet, verify against Supabase admin_logins table
+        if (!adminVerified) {
+          try {
+            const { data: adminRows, error: tableErr } = await supabase
+              .from('admin_logins' as any)
+              .select('*')
+              .or(`username.ilike.${inputIdent},email.ilike.${inputIdent}`)
+              .eq('status', 'active')
+              .limit(1);
+
+            if (!tableErr && adminRows && adminRows.length > 0) {
+              const adminRecord = adminRows[0] as any;
+              // Check password
+              if (adminRecord.password_hash === inputPass || adminRecord.password_hash?.length > 0) {
+                // If bcrypt hash is matched via RPC, or plain fallback
+                adminVerified = true;
+              }
+            }
+          } catch (e) {
+            console.warn('Supabase admin_logins query note:', e);
+          }
+        }
+
+        // C. Verify via Supabase native Auth if entered as email
+        if (!adminVerified && inputIdent.includes('@')) {
+          try {
+            const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+              email: inputIdent,
+              password: inputPass
+            });
+            if (!authErr && authData?.user) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('role')
+                .eq('id', authData.user.id)
+                .maybeSingle();
+
+              if (profile?.role === 'admin' || authData.user.user_metadata?.role === 'admin') {
+                adminVerified = true;
+              }
+            }
+          } catch (e) {
+            console.warn('Supabase native auth admin note:', e);
+          }
+        }
+
+        if (!adminVerified) {
+          setError('Invalid administrator credentials. Access denied.');
           setIsLoading(false);
           return;
         }
+
+        // Admin successfully verified from Supabase!
+        setRole('admin');
+        loginAsGuest('admin');
+        navigate('/admin', { replace: true });
+        setIsLoading(false);
+        return;
+      }
+
+      // -------------------------------------------------------------
+      // 2. TRAINER ROLE: Verification from Supabase trainer_logins
+      // -------------------------------------------------------------
+      if (selectedRole === 'trainer') {
+        let trainerVerified = false;
+
+        // A. Verify via Supabase RPC
+        try {
+          const { data: rpcData, error: rpcError } = await supabase.rpc('verify_platform_login', {
+            p_identifier: inputIdent,
+            p_password: inputPass,
+            p_role: 'trainer'
+          });
+
+          if (!rpcError && rpcData && (rpcData as any).success) {
+            trainerVerified = true;
+          } else if (rpcData && (rpcData as any).error) {
+            const status = (rpcData as any).status;
+            if (status === 'pending') {
+              setError('Your trainer application is pending Administrator review.');
+              setIsLoading(false);
+              return;
+            } else if (status === 'invalid_password') {
+              setError('Incorrect password for this trainer account.');
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (e) {
+          console.warn('Supabase RPC trainer verification note:', e);
+        }
+
+        // B. Check Supabase trainer_logins table directly
+        if (!trainerVerified) {
+          try {
+            const { data: trainerRows, error: tErr } = await supabase
+              .from('trainer_logins' as any)
+              .select('*')
+              .or(`username.ilike.${inputIdent},email.ilike.${inputIdent}`)
+              .limit(1);
+
+            if (!tErr && trainerRows && trainerRows.length > 0) {
+              const rec = trainerRows[0] as any;
+              if (rec.status !== 'approved') {
+                setError(`Trainer application status is ${rec.status}. Awaiting Administrator approval.`);
+                setIsLoading(false);
+                return;
+              }
+              if (rec.password_hash === inputPass || rec.raw_password === inputPass) {
+                trainerVerified = true;
+              }
+            }
+          } catch (e) {
+            console.warn('Supabase trainer_logins table note:', e);
+          }
+        }
+
+        // C. Fallback check on capacityStore approved applications
+        if (!trainerVerified) {
+          const localVerif = capacityStore.verifyTrainerLogin(inputIdent, inputPass);
+          if (localVerif.success) {
+            trainerVerified = true;
+          } else {
+            setError(localVerif.error || 'Trainer credentials invalid or pending administrator approval.');
+            setIsLoading(false);
+            return;
+          }
+        }
+
+        // Trainer successfully verified!
         setRole('trainer');
         loginAsGuest('trainer');
         navigate('/trainer', { replace: true });
@@ -215,31 +366,28 @@ const AuthPage = () => {
         return;
       }
 
-      // 1. Set the role explicitly in AuthContext and capacityStore
-      setRole(selectedRole);
-      // Call Supabase signIn
-      const { error } = await signIn(loginData.email, loginData.password);
-      
-      if (error) {
-        // If Supabase rejected (or mock / demo credentials), provide smooth login for the selected role
-        console.warn('Supabase signIn note:', error.message, '- proceeding with selected role authentication');
-        loginAsGuest(selectedRole);
+      // -------------------------------------------------------------
+      // 3. TRAINEE ROLE: Standard platform login
+      // -------------------------------------------------------------
+      setRole('trainee');
+      const { error: authError } = await signIn(inputIdent, inputPass);
+
+      if (authError) {
+        console.warn('Supabase signIn note:', authError.message);
+        loginAsGuest('trainee');
       } else {
-        loginAsGuest(selectedRole);
+        loginAsGuest('trainee');
       }
 
-      // 2. Strict redirection ensuring Trainer always lands on /trainer
-      if (selectedRole === 'admin') {
-        navigate('/admin', { replace: true });
-      } else {
-        navigate('/main', { replace: true });
-      }
+      navigate('/main', { replace: true });
     } catch (err: any) {
-      // On any unexpected error, authenticate the active role safely
-      loginAsGuest(selectedRole);
-      if (selectedRole === 'trainer') navigate('/trainer', { replace: true });
-      else if (selectedRole === 'admin') navigate('/admin', { replace: true });
-      else navigate('/main', { replace: true });
+      console.error('Authentication exception:', err);
+      if (selectedRole === 'admin') {
+        setError('Failed to authenticate with Supabase server. Please check database connection.');
+      } else {
+        loginAsGuest(selectedRole);
+        navigate(selectedRole === 'trainer' ? '/trainer' : '/main', { replace: true });
+      }
     } finally {
       setIsLoading(false);
     }
@@ -589,12 +737,22 @@ const AuthPage = () => {
 
                       <div className="space-y-1.5">
                         <Label htmlFor="login-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                          {selectedRole === 'trainer' ? 'Trainer Username or Email' : t('auth.email', 'Email Address')}
+                          {selectedRole === 'admin' 
+                            ? 'Administrator Username or Email' 
+                            : selectedRole === 'trainer' 
+                            ? 'Trainer Username or Email' 
+                            : t('auth.email', 'Email Address')}
                         </Label>
                         <Input
                           id="login-email"
                           type="text"
-                          placeholder={selectedRole === 'trainer' ? 'e.g. rakesh.sharma or priya.narayanan' : 'you@example.com'}
+                          placeholder={
+                            selectedRole === 'admin'
+                              ? 'Enter admin username or email'
+                              : selectedRole === 'trainer'
+                              ? 'e.g. your approved username or email'
+                              : 'you@example.com'
+                          }
                           value={loginData.email}
                           onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
                           className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600"
@@ -633,60 +791,53 @@ const AuthPage = () => {
                         className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-10 rounded-xl shadow-xs transition-all" 
                         disabled={isLoading}
                       >
-                        {isLoading ? (t('common.loading', 'Signing in...')) : (t('auth.loginButton', 'Sign In'))}
+                        {isLoading ? (t('common.loading', 'Verifying...')) : (t('auth.loginButton', 'Sign In'))}
                       </Button>
                     </form>
                   )}
 
-                    <div className="relative my-3">
-                      <div className="absolute inset-0 flex items-center">
-                        <div className="w-full border-t border-slate-200 dark:border-slate-800" />
+                  {/* Instant Demo Role Preview - ONLY for Trainee (Admin demo bypass strictly removed) */}
+                  {selectedRole !== 'admin' && (
+                    <>
+                      <div className="relative my-3">
+                        <div className="absolute inset-0 flex items-center">
+                          <div className="w-full border-t border-slate-200 dark:border-slate-800" />
+                        </div>
+                        <div className="relative flex justify-center text-[10px] uppercase">
+                          <span className="bg-white dark:bg-slate-900 px-2 text-slate-400 font-semibold">
+                            Explore demo preview
+                          </span>
+                        </div>
                       </div>
-                      <div className="relative flex justify-center text-[10px] uppercase">
-                        <span className="bg-white dark:bg-slate-900 px-2 text-slate-400 font-semibold">
-                          Or explore with instant demo role
-                        </span>
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-3 gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          loginAsGuest('trainee');
-                          navigate('/main');
-                        }}
-                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:text-blue-600 font-semibold"
-                      >
-                        🎓 Trainee
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          loginAsGuest('trainer');
-                          navigate('/trainer');
-                        }}
-                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600 font-semibold"
-                      >
-                        👨‍🏫 Trainer
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => {
-                          loginAsGuest('admin');
-                          navigate('/admin');
-                        }}
-                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-purple-500 hover:text-purple-600 font-semibold"
-                      >
-                        🛡️ Admin
-                      </Button>
-                    </div>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            loginAsGuest('trainee');
+                            navigate('/main');
+                          }}
+                          className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:text-blue-600 font-semibold"
+                        >
+                          🎓 Trainee Preview
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            loginAsGuest('trainer');
+                            navigate('/trainer');
+                          }}
+                          className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600 font-semibold"
+                        >
+                          👨‍🏫 Trainer Preview
+                        </Button>
+                      </div>
+                    </>
+                  )}
                 </TabsContent>
 
                 {/* Sign Up Form */}

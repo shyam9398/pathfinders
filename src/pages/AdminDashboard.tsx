@@ -81,21 +81,19 @@ export default function AdminDashboard() {
   const [searchParams] = useSearchParams();
 
   // Resolve current admin view from path
-  type AdminView = 'overview' | 'analytics' | 'students' | 'trainers' | 'jobs' | 'internships' | 'courses' | 'users' | 'announcements' | 'security';
+  type AdminView = 'overview' | 'students' | 'trainers' | 'jobs' | 'internships' | 'courses' | 'announcements' | 'security';
   
   const resolveView = (): AdminView => {
     const tabParam = searchParams.get('tab');
-    if (tabParam && ['overview', 'analytics', 'students', 'trainers', 'jobs', 'internships', 'courses', 'users', 'announcements', 'security'].includes(tabParam)) {
+    if (tabParam && ['overview', 'students', 'trainers', 'jobs', 'internships', 'courses', 'announcements', 'security'].includes(tabParam)) {
       return tabParam as AdminView;
     }
     const path = location.pathname.toLowerCase();
-    if (path.includes('/analytics')) return 'analytics';
     if (path.includes('/students')) return 'students';
     if (path.includes('/trainers')) return 'trainers';
     if (path.includes('/jobs')) return 'jobs';
     if (path.includes('/internships')) return 'internships';
     if (path.includes('/courses')) return 'courses';
-    if (path.includes('/users')) return 'users';
     if (path.includes('/announcements')) return 'announcements';
     if (path.includes('/security')) return 'security';
     return 'overview';
@@ -294,11 +292,43 @@ export default function AdminDashboard() {
     toast.success(`User status updated to ${status}!`);
   };
 
-  const handleApproveTrainerApp = (appId: string) => {
-    capacityStore.approveTrainerApplication(appId);
+  const handleApproveTrainerApp = async (appId: string) => {
+    const app = capacityStore.approveTrainerApplication(appId);
     setTrainerApps(capacityStore.getTrainerApplications());
     setTrainers(capacityStore.getTrainers());
-    toast.success('Trainer application approved! Trainer can now log in with their credentials.');
+
+    // Store approved trainer in Supabase trainer_logins table
+    if (app) {
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        // Call RPC helper
+        await supabase.rpc('record_approved_trainer_login', {
+          p_application_id: app.id,
+          p_name: app.name,
+          p_username: app.username || app.email.split('@')[0],
+          p_email: app.email,
+          p_password: app.password || '123456',
+          p_approved_by: 'admin'
+        });
+
+        // Direct upsert to trainer_logins table
+        await supabase.from('trainer_logins' as any).upsert({
+          application_id: app.id,
+          name: app.name,
+          username: (app.username || app.email.split('@')[0]).toLowerCase(),
+          email: app.email.toLowerCase(),
+          password_hash: app.password || '123456',
+          status: 'approved',
+          role: 'trainer',
+          approved_by: 'admin',
+          approved_at: new Date().toISOString()
+        }, { onConflict: 'email' });
+      } catch (err) {
+        console.warn('Supabase trainer_logins sync note:', err);
+      }
+    }
+
+    toast.success('Trainer application approved! Login credentials saved in Supabase trainer_logins.');
   };
 
   const handleRejectTrainerApp = (appId: string) => {
@@ -401,13 +431,11 @@ export default function AdminDashboard() {
   // Breadcrumbs title based on active view
   const getBreadcrumbTitle = () => {
     switch (activeView) {
-      case 'analytics': return 'Platform Telemetry & Analytics';
       case 'students': return 'Student Cohort Intelligence';
       case 'trainers': return 'Trainer Governance';
       case 'jobs': return 'Corporate Jobs Pipeline';
       case 'internships': return 'Internships & Campus Drives';
       case 'courses': return 'Curriculum Accreditation Audit';
-      case 'users': return 'User Directory & Approvals';
       case 'announcements': return 'Platform Broadcasts';
       case 'security': return 'Security & Supabase RBAC';
       default: return 'Admin Command Center';
@@ -451,13 +479,6 @@ export default function AdminDashboard() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-3">
-                  <Button 
-                    onClick={() => handleNavigate('analytics')}
-                    className="bg-emerald-600 hover:bg-emerald-500 text-white rounded-xl text-xs font-bold h-10 px-4 shadow-md transition-all flex items-center gap-1.5"
-                  >
-                    <BarChart3 className="w-4 h-4" />
-                    Platform Analytics
-                  </Button>
                   <Button 
                     onClick={() => setJobModalOpen(true)}
                     className="bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-bold h-10 px-4 shadow-md transition-all flex items-center gap-1.5"
@@ -669,34 +690,7 @@ export default function AdminDashboard() {
                   </div>
                 </Card>
 
-                {/* 6. User Directory & Approvals */}
-                <Card 
-                  onClick={() => handleNavigate('users')}
-                  className="glass-card hover:shadow-md transition-all cursor-pointer border-slate-200 dark:border-slate-800 p-5 group rounded-2xl flex flex-col justify-between"
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="p-2.5 rounded-xl bg-sky-50 dark:bg-sky-950/60 text-sky-600 dark:text-sky-400">
-                        <Users className="w-5 h-5" />
-                      </div>
-                      <Badge variant="outline" className="text-[10px] text-amber-600 border-amber-200 font-semibold">
-                        {users.filter(u => u.status === 'pending').length} Pending
-                      </Badge>
-                    </div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white group-hover:text-sky-600 transition-colors">
-                      User Directory & Approvals
-                    </h3>
-                    <p className="text-xs text-slate-500 mt-1 line-clamp-2">
-                      Review new registrations, approve trainee accounts, and manage institutional department assignments.
-                    </p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs font-bold text-sky-600">
-                    <span>Review Queue ({users.length})</span>
-                    <ChevronRight className="w-4 h-4 group-hover:translate-x-0.5 transition-transform" />
-                  </div>
-                </Card>
-
-                {/* 7. Platform Broadcasts */}
+                {/* 6. Platform Broadcasts */}
                 <Card 
                   onClick={() => handleNavigate('announcements')}
                   className="glass-card hover:shadow-md transition-all cursor-pointer border-slate-200 dark:border-slate-800 p-5 group rounded-2xl flex flex-col justify-between"
@@ -1691,115 +1685,7 @@ export default function AdminDashboard() {
         )}
 
         {/* ========================================================================= */}
-        {/* 7. DEDICATED INDIVIDUAL PAGE: USER DIRECTORY & APPROVALS */}
-        {/* ========================================================================= */}
-        {activeView === 'users' && (
-          <div className="space-y-6">
-            
-            {/* DEDICATED PAGE HEADER */}
-            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  onClick={() => handleNavigate('overview')}
-                  className="rounded-xl h-10 w-10 shrink-0 border-slate-200 dark:border-slate-700"
-                  title="Back to Admin Command"
-                >
-                  <ArrowLeft className="w-4 h-4 text-slate-600 dark:text-slate-300" />
-                </Button>
-                <div>
-                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-sky-50 dark:bg-sky-950/60 border border-sky-200/80 dark:border-sky-900 text-sky-700 dark:text-sky-300 text-xs font-semibold mb-1">
-                    <Users className="w-3.5 h-3.5 text-sky-600" />
-                    Identity & Membership Registry
-                  </div>
-                  <h1 className="text-2xl font-extrabold text-slate-900 dark:text-white tracking-tight">
-                    Platform User Directory & Role Registry
-                  </h1>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Approve, suspend, or reactivate platform users across Trainee, Trainer, and Admin roles.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 shrink-0">
-                <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200 px-3 py-1 font-semibold">
-                  {users.filter(u => u.status === 'pending').length} Pending Approvals
-                </Badge>
-              </div>
-            </div>
-
-            <Card className="glass-card rounded-2xl border border-slate-200/90 dark:border-slate-800 overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-800 text-slate-500 font-semibold uppercase tracking-wider bg-slate-50/50 dark:bg-slate-900/50">
-                      <th className="py-3 px-4">Name & Email</th>
-                      <th className="py-3 px-3">Role</th>
-                      <th className="py-3 px-3">Department</th>
-                      <th className="py-3 px-3">Registered Date</th>
-                      <th className="py-3 px-3">Status</th>
-                      <th className="py-3 px-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
-                    {users.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50/60 dark:hover:bg-slate-900/50 transition-colors">
-                        <td className="py-3 px-4">
-                          <strong className="text-slate-900 dark:text-white block">{u.name}</strong>
-                          <span className="text-slate-400 text-[11px]">{u.email}</span>
-                        </td>
-                        <td className="py-3 px-3 capitalize font-semibold text-slate-700 dark:text-slate-300">
-                          {u.role}
-                        </td>
-                        <td className="py-3 px-3 text-slate-500">{u.department}</td>
-                        <td className="py-3 px-3 text-slate-400">{u.registeredDate}</td>
-                        <td className="py-3 px-3">
-                          {u.status === 'approved' ? (
-                            <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-[10px]">
-                              Approved
-                            </Badge>
-                          ) : u.status === 'pending' ? (
-                            <Badge className="bg-amber-50 text-amber-700 border-amber-200 text-[10px]">
-                              Pending
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-rose-50 text-rose-700 border-rose-200 text-[10px]">
-                              Suspended
-                            </Badge>
-                          )}
-                        </td>
-                        <td className="py-3 px-4 text-right space-x-1.5">
-                          {u.status === 'pending' ? (
-                            <Button 
-                              size="sm" 
-                              onClick={() => handleUpdateUserStatus(u.id, 'approved')}
-                              className="bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg h-7 px-2.5 text-[11px]"
-                            >
-                              Approve
-                            </Button>
-                          ) : (
-                            <Button 
-                              size="sm" 
-                              variant="outline"
-                              onClick={() => handleUpdateUserStatus(u.id, u.status === 'approved' ? 'suspended' : 'approved')}
-                              className="rounded-lg h-7 px-2 text-[11px]"
-                            >
-                              {u.status === 'approved' ? 'Suspend' : 'Reactivate'}
-                            </Button>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </Card>
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* 8. DEDICATED INDIVIDUAL PAGE: PLATFORM BROADCASTS & ANNOUNCEMENTS */}
+        {/* 6. DEDICATED INDIVIDUAL PAGE: PLATFORM BROADCASTS & ANNOUNCEMENTS */}
         {/* ========================================================================= */}
         {activeView === 'announcements' && (
           <div className="space-y-6">
@@ -2044,325 +1930,6 @@ create policy "Admins can manage all roles"
               </Card>
 
             </div>
-          </div>
-        )}
-
-        {/* ========================================================================= */}
-        {/* 10. DEDICATED INDIVIDUAL PAGE: PLATFORM TELEMETRY & ANALYTICS */}
-        {/* ========================================================================= */}
-        {activeView === 'analytics' && (
-          <div className="space-y-6">
-            {/* Header */}
-            <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-3xl border border-slate-200/90 dark:border-slate-800 shadow-xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              <div className="flex items-center gap-3.5">
-                <Button 
-                  variant="outline" 
-                  size="icon" 
-                  onClick={() => handleNavigate('overview')}
-                  className="rounded-xl h-10 w-10 shrink-0 border-slate-200 dark:border-slate-700"
-                  title="Back to Admin Command"
-                >
-                  <ArrowLeft className="w-4 h-4 text-slate-600 dark:text-slate-300" />
-                </Button>
-                <div>
-                  <div className="inline-flex items-center gap-2 px-2.5 py-0.5 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 dark:border-blue-900 text-blue-700 dark:text-blue-300 text-xs font-semibold mb-1">
-                    <BarChart3 className="w-3.5 h-3.5 text-blue-600" />
-                    Real-Time Telemetry & Executive Analytics
-                  </div>
-                  <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
-                    Platform Performance & Capacity Analytics
-                  </h1>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Live telemetry across 3,450 trainees, 18 accredited university cohorts, faculty SLA performance, and corporate placement conversion.
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl">
-                  {(['7d', '30d', '90d', 'all'] as const).map(tf => (
-                    <button
-                      key={tf}
-                      onClick={() => setAnalyticsTimeframe(tf)}
-                      className={`px-3 py-1 text-xs font-bold rounded-lg transition-all ${
-                        analyticsTimeframe === tf 
-                          ? 'bg-white dark:bg-slate-900 text-blue-600 shadow-xs' 
-                          : 'text-slate-500 hover:text-slate-900 dark:hover:text-white'
-                      }`}
-                    >
-                      {tf.toUpperCase()}
-                    </button>
-                  ))}
-                </div>
-                <Button 
-                  size="sm" 
-                  variant="outline"
-                  onClick={() => toast.success('Platform Telemetry Report (CSV) exported successfully.')}
-                  className="h-9 text-xs rounded-xl gap-1.5 font-bold border-slate-200 dark:border-slate-700"
-                >
-                  <Download className="w-3.5 h-3.5 text-slate-500" />
-                  Export Telemetry
-                </Button>
-              </div>
-            </div>
-
-            {/* KPI STATS ROW */}
-            <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3.5">
-              <Card className="glass-card p-4 rounded-2xl border-slate-200 dark:border-slate-800">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Active Trainees</span>
-                <span className="text-2xl font-black text-slate-900 dark:text-white mt-1 block">
-                  <AnimatedCounter target={3450} duration={800} />
-                </span>
-                <span className="text-[10px] font-bold text-emerald-600 flex items-center gap-0.5 mt-0.5">
-                  <TrendingUp className="w-3 h-3" /> +18.4% this mo
-                </span>
-              </Card>
-
-              <Card className="glass-card p-4 rounded-2xl border-slate-200 dark:border-slate-800">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Placement Readiness</span>
-                <span className="text-2xl font-black text-blue-600 dark:text-blue-400 mt-1 block">
-                  86.4%
-                </span>
-                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">
-                  Benchmark: 65%
-                </span>
-              </Card>
-
-              <Card className="glass-card p-4 rounded-2xl border-slate-200 dark:border-slate-800">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Assessment Clear Rate</span>
-                <span className="text-2xl font-black text-emerald-600 mt-1 block">
-                  89.2%
-                </span>
-                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">
-                  4,120 cleared
-                </span>
-              </Card>
-
-              <Card className="glass-card p-4 rounded-2xl border-slate-200 dark:border-slate-800">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Faculty SLA Rating</span>
-                <span className="text-2xl font-black text-amber-500 mt-1 block">
-                  4.89★
-                </span>
-                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">
-                  12.4k sessions
-                </span>
-              </Card>
-
-              <Card className="glass-card p-4 rounded-2xl border-slate-200 dark:border-slate-800">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">Active Corporate Jobs</span>
-                <span className="text-2xl font-black text-purple-600 mt-1 block">
-                  <AnimatedCounter target={jobs.length} duration={700} />
-                </span>
-                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">
-                  ₹18.4 LPA Avg
-                </span>
-              </Card>
-
-              <Card className="glass-card p-4 rounded-2xl border-slate-200 dark:border-slate-800">
-                <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider block">System Health</span>
-                <span className="text-2xl font-black text-emerald-600 mt-1 block">
-                  99.98%
-                </span>
-                <span className="text-[10px] font-medium text-slate-400 block mt-0.5">
-                  Avg latency 42ms
-                </span>
-              </Card>
-            </div>
-
-            {/* TWO COLUMN ANALYTICS GRID */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Cohort Career Trajectory & Conversion Funnel */}
-              <Card className="lg:col-span-7 glass-card p-6 border-slate-200 dark:border-slate-800 rounded-3xl space-y-5">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <TrendingUp className="w-4 h-4 text-blue-600" />
-                      Platform Trainee Progression & Placement Funnel
-                    </h3>
-                    <p className="text-xs text-slate-500">
-                      Step-by-step conversion from intake diagnostic to certified corporate placement.
-                    </p>
-                  </div>
-                  <Badge className="bg-blue-50 text-blue-700 border-blue-200 text-xs">
-                    Intake: 3,450
-                  </Badge>
-                </div>
-
-                <div className="space-y-3 pt-2">
-                  {[
-                    { step: '1. Registered & Profile Completed', count: 3450, pct: 100, color: 'bg-blue-600' },
-                    { step: '2. Skill Gap Diagnostic & Career Target Set', count: 3180, pct: 92.1, color: 'bg-indigo-600' },
-                    { step: '3. Enrolled in Remediation Course / Clinic', count: 2840, pct: 82.3, color: 'bg-purple-600' },
-                    { step: '4. Passed Benchmark Assessment (Score ≥ 75%)', count: 2420, pct: 70.1, color: 'bg-emerald-600' },
-                    { step: '5. Shortlisted for Corporate Internship / Placement', count: 1890, pct: 54.8, color: 'bg-amber-600' },
-                    { step: '6. Final Verified Job Offer Accepted', count: 1420, pct: 41.2, color: 'bg-sky-600' }
-                  ].map((stage, idx) => (
-                    <div key={idx} className="space-y-1.5 p-3 rounded-2xl bg-slate-50/70 dark:bg-slate-800/40 border border-slate-100 dark:border-slate-800">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-800 dark:text-slate-200">{stage.step}</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-mono text-slate-500">{stage.count.toLocaleString()} Trainees</span>
-                          <span className="font-black text-slate-900 dark:text-white bg-white dark:bg-slate-900 px-2 py-0.5 rounded-md border border-slate-200 dark:border-slate-700">{stage.pct}%</span>
-                        </div>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-700 h-2.5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${stage.color} transition-all duration-700`} style={{ width: `${stage.pct}%` }} />
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              {/* Industry Skill Demand Heatmap */}
-              <Card className="lg:col-span-5 glass-card p-6 border-slate-200 dark:border-slate-800 rounded-3xl space-y-5">
-                <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Sparkles className="w-4 h-4 text-purple-600" />
-                    Market Demand vs Platform Cohort Supply
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Real-time market deficit monitoring across current hiring requisitions.
-                  </p>
-                </div>
-
-                <div className="space-y-3.5 pt-1">
-                  {[
-                    { skill: 'Java & Distributed Microservices', demand: 96, platformReadiness: 88, status: 'Balanced' },
-                    { skill: 'AI, LLMs & Machine Learning Ops', demand: 94, platformReadiness: 68, status: 'High Deficit' },
-                    { skill: 'Full Stack React & Next.js', demand: 90, platformReadiness: 85, status: 'Optimal' },
-                    { skill: 'Cloud Architecture & Kubernetes', demand: 88, platformReadiness: 62, status: 'Deficit' },
-                    { skill: 'SQL, PostgreSQL & Query Optimization', demand: 86, platformReadiness: 89, status: 'Surplus' },
-                    { skill: 'Cybersecurity & RBAC Systems', demand: 82, platformReadiness: 58, status: 'Urgent Clinic' }
-                  ].map((item, idx) => (
-                    <div key={idx} className="p-3 rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900/50 space-y-2">
-                      <div className="flex items-center justify-between text-xs">
-                        <span className="font-bold text-slate-900 dark:text-white">{item.skill}</span>
-                        <Badge 
-                          variant="outline" 
-                          className={`text-[10px] font-bold ${
-                            item.status === 'High Deficit' || item.status === 'Urgent Clinic'
-                              ? 'bg-red-50 text-red-600 border-red-200' 
-                              : item.status === 'Deficit'
-                                ? 'bg-amber-50 text-amber-600 border-amber-200'
-                                : 'bg-emerald-50 text-emerald-600 border-emerald-200'
-                          }`}
-                        >
-                          {item.status}
-                        </Badge>
-                      </div>
-
-                      <div className="grid grid-cols-2 gap-2 text-[11px]">
-                        <div>
-                          <div className="flex justify-between text-slate-400 mb-1">
-                            <span>Industry Demand</span>
-                            <span className="font-bold text-purple-600">{item.demand}%</span>
-                          </div>
-                          <Progress value={item.demand} className="h-1.5 bg-purple-100 dark:bg-purple-950" />
-                        </div>
-                        <div>
-                          <div className="flex justify-between text-slate-400 mb-1">
-                            <span>Platform Cohort</span>
-                            <span className="font-bold text-blue-600">{item.platformReadiness}%</span>
-                          </div>
-                          <Progress value={item.platformReadiness} className="h-1.5 bg-blue-100 dark:bg-blue-950" />
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-            </div>
-
-            {/* REGIONAL PARTNER INSTITUTIONS & TELEMETRY */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-              
-              {/* Partner Institution Benchmark */}
-              <Card className="lg:col-span-6 glass-card p-6 border-slate-200 dark:border-slate-800 rounded-3xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-emerald-600" />
-                    University Institutional Partners
-                  </h3>
-                  <Badge variant="outline" className="text-xs">
-                    18 Campuses Active
-                  </Badge>
-                </div>
-
-                <div className="divide-y divide-slate-100 dark:divide-slate-800 text-xs">
-                  {[
-                    { name: 'IIT Delhi — AI & Data Science Center', trainees: 480, avgScore: 91.2, placement: 94.5 },
-                    { name: 'NIT Trichy — Dept of Computer Applications', trainees: 420, avgScore: 88.6, placement: 91.0 },
-                    { name: 'BITS Pilani — Software Engineering Wing', trainees: 390, avgScore: 89.4, placement: 92.8 },
-                    { name: 'VIT Vellore — School of Computer Science', trainees: 640, avgScore: 84.1, placement: 86.2 },
-                    { name: 'SRM Institute of Science & Technology', trainees: 580, avgScore: 82.5, placement: 83.0 }
-                  ].map((inst, idx) => (
-                    <div key={idx} className="py-3 first:pt-0 last:pb-0 flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-slate-900 dark:text-white block">{inst.name}</span>
-                        <span className="text-[11px] text-slate-400">{inst.trainees} Trainees enrolled</span>
-                      </div>
-                      <div className="text-right">
-                        <span className="font-black text-emerald-600 block">{inst.placement}% Placed</span>
-                        <span className="text-[10px] text-slate-400">Avg Readiness: {inst.avgScore}%</span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </Card>
-
-              {/* Real-Time Microservice Telemetry */}
-              <Card className="lg:col-span-6 glass-card p-6 border-slate-200 dark:border-slate-800 rounded-3xl space-y-4">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <ShieldCheck className="w-4 h-4 text-blue-600" />
-                    Microservices & Infrastructure Telemetry
-                  </h3>
-                  <span className="flex items-center gap-1.5 text-xs text-emerald-600 font-bold">
-                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    All Systems Operational
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                  {[
-                    { name: 'Supabase Database Engine', latency: '12ms', status: 'Optimal', reqSec: '2,400 rps' },
-                    { name: 'AI Career Guidance Router', latency: '118ms', status: 'Optimal', reqSec: '420 rps' },
-                    { name: 'ATS Resume Intelligence Parser', latency: '94ms', status: 'Optimal', reqSec: '380 rps' },
-                    { name: 'Real-time WebSocket Clinic Hub', latency: '24ms', status: 'Optimal', reqSec: '1,850 conn' }
-                  ].map((srv, idx) => (
-                    <div key={idx} className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200/80 dark:border-slate-700/80 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span className="font-bold text-xs text-slate-900 dark:text-white">{srv.name}</span>
-                        <Badge className="bg-emerald-50 text-emerald-700 text-[10px] border-emerald-200 font-bold">
-                          {srv.status}
-                        </Badge>
-                      </div>
-                      <div className="flex items-center justify-between text-[11px] text-slate-500">
-                        <span>Latency: <strong className="text-blue-600 font-mono">{srv.latency}</strong></span>
-                        <span>Throughput: <strong className="text-slate-700 dark:text-slate-300 font-mono">{srv.reqSec}</strong></span>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-
-                <div className="p-3.5 rounded-2xl bg-blue-50/70 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-900 flex items-center justify-between text-xs">
-                  <span className="text-slate-700 dark:text-slate-300 font-medium">
-                    Want to manage database users, approvals, and permissions?
-                  </span>
-                  <Button 
-                    size="sm" 
-                    onClick={() => handleNavigate('overview')}
-                    className="bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl h-8 px-3"
-                  >
-                    Open Admin Command
-                  </Button>
-                </div>
-              </Card>
-
-            </div>
-
           </div>
         )}
 

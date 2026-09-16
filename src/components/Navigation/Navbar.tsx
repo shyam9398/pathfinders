@@ -39,7 +39,8 @@ import {
   LogOut,
   PanelLeftClose,
   PanelLeftOpen,
-  Rocket
+  Rocket,
+  Code
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
@@ -112,7 +113,7 @@ export const Navbar: React.FC<NavbarProps> = ({
     { label: t('1:1 Mentorship', '1:1 Mentorship'), path: '/trainer/sessions', icon: Calendar },
     { label: t('Courses Studio', 'Courses Studio'), path: '/courses', icon: BookOpen },
     { label: t('Trainer Library', 'Trainer Library'), path: '/trainer/library', icon: FolderGit2 },
-    { label: t('Cohort Trainees', 'Cohort Trainees'), path: '/trainer/trainees', icon: Users },
+    { label: t('Capstone & PR Code Review Arena', 'Capstone & PR Code Review Arena'), path: '/trainer/capstones', icon: Code },
     { label: t('Doubt Clinic', 'Doubt Clinic'), path: '/trainer/doubts', icon: MessageSquare },
     { label: t('Cohort Analytics', 'Cohort Analytics'), path: '/trainer/analytics', icon: BarChart3 },
     { label: t('Profile', 'Profile'), path: '/profile', icon: User },
@@ -120,10 +121,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   ];
 
   const adminNavItems = [
-    { label: t('Platform Analytics', 'Platform Analytics'), path: '/admin/analytics', icon: BarChart3 },
     { label: t('Admin Command', 'Admin Command'), path: '/admin', icon: ShieldCheck },
     { label: t('Trainer Governance', 'Trainer Governance'), path: '/admin/trainers', icon: Award },
-    { label: t('User Directory', 'User Directory'), path: '/admin/users', icon: Users },
     { label: t('Courses Audit', 'Courses Audit'), path: '/courses', icon: BookOpen },
     { label: t('Skill Competency', 'Skill Competency'), path: '/skill-gaps', icon: TrendingUp },
     { label: t('Jobs Pipeline', 'Jobs Pipeline'), path: '/admin/jobs', icon: Briefcase },

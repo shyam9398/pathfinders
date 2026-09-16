@@ -52,6 +52,8 @@ export const phraseDictionary: Record<string, { hi: string; te: string }> = {
   "trainer overview": { hi: "प्रशिक्षक अवलोकन", te: "ట్రైనర్ అవలోకనం" },
   "courses studio": { hi: "कोर्स स्टूडियो", te: "కోర్సు స్టూడియో" },
   "cohort trainees": { hi: "समूह प्रशिक्षु", te: "బ్యాచ్ ట్రైనీలు" },
+  "capstone & pr code review arena": { hi: "कैपस्टोन एवं पीआर कोड समीक्षा एरिना", te: "క్యాప్‌స్టోన్ & PR కోడ్ రివ్యూ అరేనా" },
+  "upload course": { hi: "कोर्स अपलोड करें", te: "కోర్సును అప్‌లోడ్ చేయండి" },
   "doubt clinic": { hi: "संदेह निवारण क्लिनिक", te: "డౌట్ క్లినిక్" },
   "cohort analytics": { hi: "समूह विश्लेषण", te: "బ్యాచ్ అనలిటిక్స్" },
   "why you match": { hi: "आप क्यों उपयुक्त हैं", te: "మీరు ఎందుకు సరిపోతారు" },

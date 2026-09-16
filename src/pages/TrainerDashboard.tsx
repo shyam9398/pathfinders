@@ -67,9 +67,9 @@ export default function TrainerDashboard() {
     const path = location.pathname.toLowerCase();
     if (path.includes('/courses')) return 'courses';
     if (path.includes('/library') || path.includes('/resources')) return 'resources';
-    if (path.includes('/trainees') || path.includes('/sessions')) return 'sessions';
+    if (path.includes('/sessions')) return 'sessions';
     if (path.includes('/clinic') || path.includes('/doubts')) return 'clinic';
-    if (path.includes('/capstones') || path.includes('/reviews') || path.includes('/projects')) return 'capstones';
+    if (path.includes('/capstones') || path.includes('/reviews') || path.includes('/projects') || path.includes('/trainees')) return 'capstones';
     if (path.includes('/analytics') || path.includes('/feedback')) return 'analytics';
     if (path.includes('/radar')) return 'radar';
     return 'overview';
@@ -143,7 +143,7 @@ export default function TrainerDashboard() {
     }
   ]);
 
-  // Capstone & Project Submissions for review
+  // Capstone & Project Submissions for review (trainee project demo apps)
   const [capstoneReviews, setCapstoneReviews] = useState([
     {
       id: 'rev-1',
@@ -166,8 +166,66 @@ export default function TrainerDashboard() {
       status: 'approved',
       score: 95,
       skillsTargeted: ['REST APIs', 'SQL', 'Security']
+    },
+    {
+      id: 'rev-3',
+      studentName: 'Rohan Sharma',
+      projectTitle: 'AI Resume Parser & Diagnostic Matcher',
+      submittedAt: '2 days ago',
+      githubUrl: 'https://github.com/student/ai-resume-parser',
+      demoUrl: 'https://ai-resume-parser.web.app',
+      status: 'pending_review',
+      score: null as number | null,
+      skillsTargeted: ['Python', 'FastAPI', 'NLP', 'Vector DB']
+    },
+    {
+      id: 'rev-4',
+      studentName: 'Sneha Patel',
+      projectTitle: 'Real-Time Collaborative Code Arena',
+      submittedAt: '3 days ago',
+      githubUrl: 'https://github.com/student/collab-code-arena',
+      demoUrl: 'https://collab-code-arena.vercel.app',
+      status: 'approved',
+      score: 98,
+      skillsTargeted: ['React', 'WebSockets', 'Node.js', 'Redis']
+    },
+    {
+      id: 'rev-5',
+      studentName: 'Kunal Deshmukh',
+      projectTitle: 'High-Throughput Microservice Payment Gateway',
+      submittedAt: 'Sept 14, 2026',
+      githubUrl: 'https://github.com/student/microservices-gateway',
+      demoUrl: 'https://payment-gateway-demo.fly.dev',
+      status: 'approved',
+      score: 92,
+      skillsTargeted: ['Spring Boot', 'Kafka', 'PostgreSQL', 'Docker']
     }
   ]);
+
+  // Submit Project Modal State (trainees submitting demo apps)
+  const [submitProjectModalOpen, setSubmitProjectModalOpen] = useState(false);
+  const [newProjStudentName, setNewProjStudentName] = useState('');
+  const [newProjTitle, setNewProjTitle] = useState('');
+  const [newProjGithub, setNewProjGithub] = useState('');
+  const [newProjDemo, setNewProjDemo] = useState('');
+  const [newProjSkills, setNewProjSkills] = useState('React, Node.js, PostgreSQL');
+
+  // Grade & Review Modal State
+  const [gradeModalOpen, setGradeModalOpen] = useState(false);
+  const [selectedReviewForGrade, setSelectedReviewForGrade] = useState<any | null>(null);
+  const [gradeScore, setGradeScore] = useState(95);
+  const [gradeFeedback, setGradeFeedback] = useState('Excellent modular codebase with clean unit tests and low latency API endpoints.');
+
+  // Mentorship sessions status filter
+  const [mentorshipStatusFilter, setMentorshipStatusFilter] = useState<'all' | 'confirmed' | 'pending' | 'completed'>('all');
+
+  // Schedule Mentorship Slot Modal State
+  const [scheduleSlotModalOpen, setScheduleSlotModalOpen] = useState(false);
+  const [slotStudentName, setSlotStudentName] = useState('');
+  const [slotSkillGap, setSlotSkillGap] = useState('');
+  const [slotDate, setSlotDate] = useState('Tomorrow');
+  const [slotTime, setSlotTime] = useState('03:00 PM - 03:45 PM');
+  const [slotNotes, setSlotNotes] = useState('');
 
   // Launch Workshop Modal State (from Skill Gap Demand)
   const [workshopModalOpen, setWorkshopModalOpen] = useState(false);
@@ -179,6 +237,73 @@ export default function TrainerDashboard() {
   // Search & Filter state for resources
   const [resourceFilter, setResourceFilter] = useState('all');
   const [resourceSearch, setResourceSearch] = useState('');
+
+  // Handle Trainee Capstone Project Code Submission
+  const handleSubmitProject = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newProjTitle.trim() || !newProjStudentName.trim()) {
+      toast.error('Please enter trainee name and project title.');
+      return;
+    }
+    const newSubmission = {
+      id: `rev-${Date.now()}`,
+      studentName: newProjStudentName.trim(),
+      projectTitle: newProjTitle.trim(),
+      submittedAt: 'Just now',
+      githubUrl: newProjGithub.trim() || 'https://github.com/student/new-capstone-project',
+      demoUrl: newProjDemo.trim() || 'https://demo-app-live.vercel.app',
+      status: 'pending_review',
+      score: null as number | null,
+      skillsTargeted: newProjSkills.split(',').map(s => s.trim()).filter(Boolean)
+    };
+    setCapstoneReviews(prev => [newSubmission, ...prev]);
+    toast.success(`Capstone "${newSubmission.projectTitle}" submitted by ${newSubmission.studentName}!`);
+    setSubmitProjectModalOpen(false);
+    setNewProjStudentName('');
+    setNewProjTitle('');
+    setNewProjGithub('');
+    setNewProjDemo('');
+  };
+
+  // Handle Rubric Grade Submission
+  const handleSaveGrade = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedReviewForGrade) return;
+    setCapstoneReviews(prev => prev.map(r => r.id === selectedReviewForGrade.id ? {
+      ...r,
+      status: 'approved',
+      score: gradeScore
+    } : r));
+    toast.success(`Project "${selectedReviewForGrade.projectTitle}" certified! Score: ${gradeScore}/100`);
+    setGradeModalOpen(false);
+  };
+
+  // Handle Schedule Mentorship Slot
+  const handleScheduleSlot = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!slotStudentName.trim() || !slotSkillGap.trim()) {
+      toast.error('Please specify student name and skill gap.');
+      return;
+    }
+    const newSession = capacityStore.bookMentorshipSession({
+      traineeId: `trainee-${Date.now()}`,
+      traineeName: slotStudentName.trim(),
+      trainerId: trainerId,
+      trainerName: trainerName,
+      skillGap: slotSkillGap.trim(),
+      scheduledDate: slotDate,
+      timeSlot: slotTime,
+      status: 'confirmed',
+      notes: slotNotes.trim() || 'Remedial 1-on-1 mentorship session on target competency.',
+      meetingLink: `https://meet.google.com/capacity-${Math.random().toString(36).substring(7)}`
+    });
+    setSessions(capacityStore.getMentorshipSessions(trainerId));
+    toast.success(`1:1 Mentorship scheduled with ${newSession.traineeName}!`);
+    setScheduleSlotModalOpen(false);
+    setSlotStudentName('');
+    setSlotSkillGap('');
+    setSlotNotes('');
+  };
 
   // Handle Session Status Updates
   const handleSessionAction = (sessionId: string, newStatus: MentorshipSession['status']) => {
@@ -737,83 +862,126 @@ export default function TrainerDashboard() {
                   Direct clinical appointments requested by trainees to bridge specific diagnostic gaps.
                 </p>
               </div>
-              <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs px-3 py-1 font-bold">
-                <AnimatedCounter target={sessions.length} suffix=" Total Session Requests" />
-              </Badge>
+              <div className="flex items-center gap-2.5">
+                <Button
+                  onClick={() => setScheduleSlotModalOpen(true)}
+                  className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl h-9 px-3.5 flex items-center gap-1.5 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Schedule Mentorship Slot
+                </Button>
+                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs px-3 py-1 font-bold">
+                  <AnimatedCounter target={sessions.length} suffix=" Total Sessions" />
+                </Badge>
+              </div>
+            </div>
+
+            {/* Status Filter Tabs */}
+            <div className="flex items-center gap-2 border-b border-slate-200 dark:border-slate-800 pb-3 flex-wrap">
+              {(['all', 'confirmed', 'pending', 'completed'] as const).map((st) => {
+                const count = st === 'all' ? sessions.length : sessions.filter(s => s.status === st).length;
+                return (
+                  <button
+                    key={st}
+                    onClick={() => setMentorshipStatusFilter(st)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-semibold capitalize transition-all ${
+                      mentorshipStatusFilter === st
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:bg-slate-50'
+                    }`}
+                  >
+                    {st} ({count})
+                  </button>
+                );
+              })}
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
-              {sessions.map((sess) => (
-                <Card key={sess.id} className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
-                  <div>
-                    <div className="flex items-start justify-between">
+              {sessions
+                .filter(s => mentorshipStatusFilter === 'all' || s.status === mentorshipStatusFilter)
+                .map((sess) => {
+                  const initials = sess.traineeName
+                    ? sess.traineeName.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase()
+                    : 'TR';
+                  return (
+                    <Card key={sess.id} className="glass-card p-5 border-slate-200 dark:border-slate-800 rounded-2xl flex flex-col justify-between space-y-4">
                       <div>
-                        <h3 className="font-bold text-slate-900 dark:text-white text-base">{sess.traineeName}</h3>
-                        <span className="text-xs text-slate-500 block mt-0.5">Focus Gap: <strong>{sess.skillGap}</strong></span>
-                      </div>
-                      <Badge 
-                        variant="outline"
-                        className={`text-[10px] capitalize ${
-                          sess.status === 'confirmed' 
-                            ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                            : sess.status === 'pending'
-                              ? 'bg-amber-50 text-amber-700 border-amber-200'
-                              : 'bg-blue-50 text-blue-700 border-blue-200'
-                        }`}
-                      >
-                        {sess.status}
-                      </Badge>
-                    </div>
+                        <div className="flex items-start justify-between">
+                          <div className="flex items-center gap-3">
+                            <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-emerald-500 to-teal-600 text-white font-black text-xs flex items-center justify-center shrink-0 shadow-xs">
+                              {initials}
+                            </div>
+                            <div>
+                              <h3 className="font-bold text-slate-900 dark:text-white text-sm">{sess.traineeName}</h3>
+                              <span className="text-[11px] text-slate-500 block">Gap: <strong className="text-emerald-700 dark:text-emerald-400">{sess.skillGap}</strong></span>
+                            </div>
+                          </div>
+                          <Badge 
+                            variant="outline"
+                            className={`text-[10px] capitalize font-bold ${
+                              sess.status === 'confirmed' 
+                                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                                : sess.status === 'pending'
+                                  ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                  : 'bg-slate-100 text-slate-700 border-slate-200 dark:bg-slate-800 dark:text-slate-300'
+                            }`}
+                          >
+                            {sess.status}
+                          </Badge>
+                        </div>
 
-                    <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
-                      <div className="flex items-center gap-2">
-                        <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Date: <strong>{sess.scheduledDate}</strong></span>
+                        <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 space-y-1.5 text-xs text-slate-600 dark:text-slate-400">
+                          <div className="flex items-center gap-2">
+                            <Calendar className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Date: <strong>{sess.scheduledDate}</strong></span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-slate-400" />
+                            <span>Time Slot: <strong>{sess.timeSlot}</strong></span>
+                          </div>
+                          {sess.notes && (
+                            <p className="text-[11px] text-slate-600 dark:text-slate-400 italic mt-2 bg-slate-50 dark:bg-slate-900/60 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800 leading-relaxed">
+                              "{sess.notes}"
+                            </p>
+                          )}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Clock className="w-3.5 h-3.5 text-slate-400" />
-                        <span>Time Slot: <strong>{sess.timeSlot}</strong></span>
-                      </div>
-                      {sess.notes && (
-                        <p className="text-[11px] text-slate-500 italic mt-2 bg-slate-50 dark:bg-slate-900/60 p-2 rounded-lg">
-                          "{sess.notes}"
-                        </p>
-                      )}
-                    </div>
-                  </div>
 
-                  <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
-                    {sess.status === 'pending' ? (
-                      <Button 
-                        size="sm"
-                        onClick={() => handleSessionAction(sess.id, 'confirmed')}
-                        className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 rounded-lg font-semibold"
-                      >
-                        Confirm Booking
-                      </Button>
-                    ) : (
-                      <>
-                        <a 
-                          href={sess.meetingLink || 'https://meet.google.com/capacity-mentorship-session'}
-                          target="_blank" 
-                          rel="noreferrer"
-                          className="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 rounded-lg"
-                        >
-                          Launch Meet
-                        </a>
-                        <Button 
-                          size="sm"
-                          variant="outline"
-                          onClick={() => handleSessionAction(sess.id, 'completed')}
-                          className="text-xs h-8 rounded-lg"
-                        >
-                          Mark Complete
-                        </Button>
-                      </>
-                    )}
-                  </div>
-                </Card>
-              ))}
+                      <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                        {sess.status === 'pending' ? (
+                          <Button 
+                            size="sm"
+                            onClick={() => handleSessionAction(sess.id, 'confirmed')}
+                            className="w-full bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-8 rounded-lg font-semibold"
+                          >
+                            Confirm Booking
+                          </Button>
+                        ) : (
+                          <>
+                            <a 
+                              href={sess.meetingLink || 'https://meet.google.com/capacity-mentorship-session'}
+                              target="_blank" 
+                              rel="noreferrer"
+                              className="flex-1 text-center bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold py-1.5 rounded-lg"
+                            >
+                              Launch Meet
+                            </a>
+                            {sess.status !== 'completed' && (
+                              <Button 
+                                size="sm"
+                                variant="outline"
+                                onClick={() => handleSessionAction(sess.id, 'completed')}
+                                className="text-xs h-8 rounded-lg"
+                              >
+                                Mark Complete
+                              </Button>
+                            )}
+                          </>
+                        )}
+                      </div>
+                    </Card>
+                  );
+                })}
             </div>
           </div>
         )}
@@ -833,10 +1001,10 @@ export default function TrainerDashboard() {
               </div>
               <Button 
                 onClick={() => setNewCourseOpen(true)}
-                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl h-9 px-4 flex items-center gap-1.5"
+                className="bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl h-9 px-4 flex items-center gap-1.5 shadow-sm"
               >
-                <Plus className="w-4 h-4" />
-                Create New Course
+                <Upload className="w-4 h-4" />
+                Upload Course
               </Button>
             </div>
 
@@ -1065,9 +1233,18 @@ export default function TrainerDashboard() {
                   Inspect student pull requests on GitHub, evaluate software architectural patterns, and grade capstones.
                 </p>
               </div>
-              <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs px-3 py-1 font-bold">
-                <AnimatedCounter target={capstoneReviews.length} suffix=" Submissions in Arena" />
-              </Badge>
+              <div className="flex items-center gap-2.5">
+                <Button
+                  onClick={() => setSubmitProjectModalOpen(true)}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-semibold rounded-xl h-9 px-3.5 flex items-center gap-1.5 shadow-sm"
+                >
+                  <Plus className="w-4 h-4" />
+                  Submit Trainee Project Code
+                </Button>
+                <Badge className="bg-indigo-50 text-indigo-700 border-indigo-200 text-xs px-3 py-1 font-bold">
+                  <AnimatedCounter target={capstoneReviews.length} suffix=" Submissions in Arena" />
+                </Badge>
+              </div>
             </div>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
@@ -1081,7 +1258,7 @@ export default function TrainerDashboard() {
                       </div>
                       <Badge 
                         variant="outline"
-                        className={`text-[10px] capitalize ${rev.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
+                        className={`text-[10px] capitalize font-bold ${rev.status === 'approved' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}
                       >
                         {rev.status.replace('_', ' ')}
                       </Badge>
@@ -1089,7 +1266,7 @@ export default function TrainerDashboard() {
 
                     <div className="mt-3 flex flex-wrap gap-1.5">
                       {rev.skillsTargeted.map((s, idx) => (
-                        <Badge key={idx} variant="outline" className="text-[10px] bg-slate-50">
+                        <Badge key={idx} variant="outline" className="text-[10px] bg-slate-50 dark:bg-slate-800">
                           {s}
                         </Badge>
                       ))}
@@ -1114,8 +1291,9 @@ export default function TrainerDashboard() {
                     <Button 
                       size="sm"
                       onClick={() => {
-                        setCapstoneReviews(prev => prev.map(r => r.id === rev.id ? { ...r, status: 'approved', score: 96 } : r));
-                        toast.success(`Project ${rev.projectTitle} certified! Grade: 96/100`);
+                        setSelectedReviewForGrade(rev);
+                        setGradeScore(rev.score || 95);
+                        setGradeModalOpen(true);
                       }}
                       className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-8 rounded-lg font-semibold"
                     >
@@ -1405,6 +1583,233 @@ export default function TrainerDashboard() {
               </Button>
               <Button type="submit" className="bg-blue-600 hover:bg-blue-700 text-white text-xs h-9 font-semibold rounded-xl">
                 Schedule & Notify Trainees
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* SUBMIT TRAINEE PROJECT CODE / DEMO APP MODAL */}
+      <Dialog open={submitProjectModalOpen} onOpenChange={setSubmitProjectModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Code className="w-4 h-4 text-indigo-600" />
+              Submit Capstone Project / PR
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Submit trainee project source code and live deployed web application for architectural review.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSubmitProject} className="space-y-3 pt-2">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Trainee Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                placeholder="e.g. Ananya Roy"
+                value={newProjStudentName}
+                onChange={e => setNewProjStudentName(e.target.value)}
+                required
+                className="text-xs rounded-xl h-9"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Project Title <span className="text-red-500">*</span>
+              </label>
+              <Input
+                placeholder="e.g. Distributed Task Queue in Go & Redis"
+                value={newProjTitle}
+                onChange={e => setNewProjTitle(e.target.value)}
+                required
+                className="text-xs rounded-xl h-9"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                GitHub Repository URL
+              </label>
+              <Input
+                placeholder="https://github.com/trainee/project-repo"
+                value={newProjGithub}
+                onChange={e => setNewProjGithub(e.target.value)}
+                className="text-xs rounded-xl h-9 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Live Demo App URL
+              </label>
+              <Input
+                placeholder="https://my-demo-app.vercel.app"
+                value={newProjDemo}
+                onChange={e => setNewProjDemo(e.target.value)}
+                className="text-xs rounded-xl h-9 font-mono"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Tech Stack / Skills (Comma-separated)
+              </label>
+              <Input
+                placeholder="e.g. React, Node.js, Docker, Redis"
+                value={newProjSkills}
+                onChange={e => setNewProjSkills(e.target.value)}
+                className="text-xs rounded-xl h-9"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" variant="ghost" onClick={() => setSubmitProjectModalOpen(false)} className="text-xs h-9">
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs h-9 font-semibold rounded-xl">
+                Submit to Arena
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* GRADE & CERTIFY MODAL */}
+      <Dialog open={gradeModalOpen} onOpenChange={setGradeModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Award className="w-4 h-4 text-emerald-600" />
+              Evaluate & Certify Capstone
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              {selectedReviewForGrade?.projectTitle} by {selectedReviewForGrade?.studentName}
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleSaveGrade} className="space-y-3 pt-2">
+            <div>
+              <div className="flex justify-between items-center mb-1">
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Rubric Assessment Score (1-100)
+                </label>
+                <span className="text-sm font-black text-indigo-600">{gradeScore}/100</span>
+              </div>
+              <input
+                type="range"
+                min="60"
+                max="100"
+                value={gradeScore}
+                onChange={e => setGradeScore(parseInt(e.target.value))}
+                className="w-full h-2 bg-slate-200 rounded-lg cursor-pointer accent-indigo-600"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Code Review & Architecture Feedback
+              </label>
+              <textarea
+                rows={3}
+                value={gradeFeedback}
+                onChange={e => setGradeFeedback(e.target.value)}
+                className="w-full p-2.5 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" variant="ghost" onClick={() => setGradeModalOpen(false)} className="text-xs h-9">
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 font-semibold rounded-xl">
+                Certify & Save Grade
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* SCHEDULE MENTORSHIP SLOT MODAL */}
+      <Dialog open={scheduleSlotModalOpen} onOpenChange={setScheduleSlotModalOpen}>
+        <DialogContent className="max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-base font-bold flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-emerald-600" />
+              Schedule 1-on-1 Mentorship Slot
+            </DialogTitle>
+            <DialogDescription className="text-xs text-slate-500">
+              Create a personalized clinical mentoring appointment to resolve a student's competency gap.
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleScheduleSlot} className="space-y-3 pt-2">
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Trainee Name <span className="text-red-500">*</span>
+              </label>
+              <Input
+                placeholder="e.g. Shyam Sundar"
+                value={slotStudentName}
+                onChange={e => setSlotStudentName(e.target.value)}
+                required
+                className="text-xs rounded-xl h-9"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Focus Skill Gap <span className="text-red-500">*</span>
+              </label>
+              <Input
+                placeholder="e.g. System Design & Distributed Caching"
+                value={slotSkillGap}
+                onChange={e => setSlotSkillGap(e.target.value)}
+                required
+                className="text-xs rounded-xl h-9"
+              />
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Date</label>
+                <Input
+                  value={slotDate}
+                  onChange={e => setSlotDate(e.target.value)}
+                  className="text-xs rounded-xl h-9"
+                />
+              </div>
+              <div>
+                <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">Time Slot</label>
+                <Input
+                  value={slotTime}
+                  onChange={e => setSlotTime(e.target.value)}
+                  className="text-xs rounded-xl h-9"
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 block mb-1">
+                Session Focus / Agenda Notes
+              </label>
+              <textarea
+                rows={2}
+                placeholder="Key diagnostic questions or topics to review..."
+                value={slotNotes}
+                onChange={e => setSlotNotes(e.target.value)}
+                className="w-full p-2 text-xs bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl"
+              />
+            </div>
+
+            <div className="flex justify-end gap-2 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <Button type="button" variant="ghost" onClick={() => setScheduleSlotModalOpen(false)} className="text-xs h-9">
+                Cancel
+              </Button>
+              <Button type="submit" className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs h-9 font-semibold rounded-xl">
+                Confirm Slot
               </Button>
             </div>
           </form>

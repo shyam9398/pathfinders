@@ -742,6 +742,37 @@ class CapacityStore {
       this.saveTrainers(trainers);
     }
 
+    // Asynchronously synchronize to Supabase trainer_logins table
+    try {
+      import('@/integrations/supabase/client').then(({ supabase }) => {
+        supabase.from('trainer_logins' as any).upsert({
+          application_id: app.id,
+          name: app.name,
+          username: (app.username || app.email.split('@')[0]).toLowerCase(),
+          email: app.email.toLowerCase(),
+          password_hash: app.password || '123456',
+          status: 'approved',
+          role: 'trainer',
+          approved_by: 'admin',
+          approved_at: new Date().toISOString()
+        }, { onConflict: 'email' }).then(({ error }) => {
+          if (error) console.log('Supabase trainer_logins sync note:', error.message);
+        });
+
+        // Also call record_approved_trainer_login RPC
+        supabase.rpc('record_approved_trainer_login', {
+          p_application_id: app.id,
+          p_name: app.name,
+          p_username: (app.username || app.email.split('@')[0]).toLowerCase(),
+          p_email: app.email.toLowerCase(),
+          p_password: app.password || '123456',
+          p_approved_by: 'admin'
+        }).then(() => {});
+      }).catch(err => console.log('Supabase import note:', err));
+    } catch (e) {
+      console.log('Supabase trainer_logins sync catch:', e);
+    }
+
     return app;
   }
 
@@ -1238,14 +1269,14 @@ class CapacityStore {
   // Mentorship Sessions Storage
   public getMentorshipSessions(userId?: string, trainerId?: string): MentorshipSession[] {
     const raw = localStorage.getItem('cc_mentorship_sessions');
-    let sessions: MentorshipSession[] = raw ? JSON.parse(raw) : [
+    const defaultDemoSessions: MentorshipSession[] = [
       {
         id: 'session-1',
         traineeId: 'guest',
         traineeName: 'Shyam Sundar',
         trainerId: 'trainer-2',
-        trainerName: 'Priya Narayanan',
-        skillGap: 'Data Structures & OOP',
+        trainerName: 'Dr. Priya Narayanan',
+        skillGap: 'Data Structures & Algorithmic Complexity',
         scheduledDate: 'Tomorrow',
         timeSlot: '04:00 PM - 04:45 PM',
         status: 'confirmed',
@@ -1256,23 +1287,101 @@ class CapacityStore {
       {
         id: 'session-2',
         traineeId: 'trainee-102',
-        traineeName: 'Aarav Mehta',
+        traineeName: 'Sneha Patel',
         trainerId: 'trainer-2',
-        trainerName: 'Priya Narayanan',
+        trainerName: 'Dr. Priya Narayanan',
         skillGap: 'Advanced SQL Query Optimization',
         scheduledDate: 'Friday',
         timeSlot: '02:30 PM - 03:15 PM',
         status: 'pending',
-        notes: 'Query execution plans and non-clustered index scanning.',
+        notes: 'Query execution plans, non-clustered index scanning, and eliminating N+1 query bottlenecks.',
         meetingLink: 'https://meet.google.com/capacity-sql-remedial',
+        bookedAt: new Date().toISOString()
+      },
+      {
+        id: 'session-3',
+        traineeId: 'trainee-103',
+        traineeName: 'Aarav Mehta',
+        trainerId: 'trainer-2',
+        trainerName: 'Dr. Priya Narayanan',
+        skillGap: 'System Design & Distributed Caching',
+        scheduledDate: 'Monday',
+        timeSlot: '11:00 AM - 11:45 AM',
+        status: 'confirmed',
+        notes: 'Architecting Redis cache eviction strategies (LRU vs LFU) for high-throughput messaging system.',
+        meetingLink: 'https://meet.google.com/capacity-sysdesign-session',
+        bookedAt: new Date().toISOString()
+      },
+      {
+        id: 'session-4',
+        traineeId: 'trainee-104',
+        traineeName: 'Ananya Roy',
+        trainerId: 'trainer-2',
+        trainerName: 'Dr. Priya Narayanan',
+        skillGap: 'Docker & Kubernetes Microservices',
+        scheduledDate: 'Yesterday',
+        timeSlot: '05:00 PM - 05:45 PM',
+        status: 'completed',
+        notes: 'Resolved multi-container Docker Compose bridge network communication and health check timeouts.',
+        meetingLink: 'https://meet.google.com/capacity-docker-complete',
+        bookedAt: new Date().toISOString()
+      },
+      {
+        id: 'session-5',
+        traineeId: 'trainee-105',
+        traineeName: 'Rohan Verma',
+        trainerId: 'trainer-2',
+        trainerName: 'Dr. Priya Narayanan',
+        skillGap: 'PyTorch Deep Learning & Sequence Models',
+        scheduledDate: 'Saturday',
+        timeSlot: '03:00 PM - 03:45 PM',
+        status: 'pending',
+        notes: 'Vanishing gradient problem during backpropagation in deep LSTM models for time-series forecasting.',
+        meetingLink: 'https://meet.google.com/capacity-dl-remedial',
+        bookedAt: new Date().toISOString()
+      },
+      {
+        id: 'session-6',
+        traineeId: 'trainee-106',
+        traineeName: 'Kavita Desai',
+        trainerId: 'trainer-2',
+        trainerName: 'Dr. Priya Narayanan',
+        skillGap: 'Cloud Infrastructure & Terraform IaC',
+        scheduledDate: 'Tuesday',
+        timeSlot: '10:00 AM - 10:45 AM',
+        status: 'confirmed',
+        notes: 'Setting up AWS VPC peering, subnets, and automated state locking with DynamoDB in Terraform.',
+        meetingLink: 'https://meet.google.com/capacity-cloud-iac',
         bookedAt: new Date().toISOString()
       }
     ];
 
+    let sessions: MentorshipSession[] = defaultDemoSessions;
+    if (raw) {
+      try {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed) && parsed.length >= 4) {
+          sessions = parsed;
+        } else {
+          // Merge default demo sessions
+          sessions = defaultDemoSessions;
+          localStorage.setItem('cc_mentorship_sessions', JSON.stringify(sessions));
+        }
+      } catch {
+        sessions = defaultDemoSessions;
+      }
+    } else {
+      localStorage.setItem('cc_mentorship_sessions', JSON.stringify(defaultDemoSessions));
+    }
+
     if (trainerId) {
-      sessions = sessions.filter(s => s.trainerId === trainerId);
+      const filtered = sessions.filter(s => s.trainerId === trainerId);
+      if (filtered.length > 0) return filtered;
+      // Fallback: provide the demo sessions tailored to this trainer
+      return sessions.map(s => ({ ...s, trainerId }));
     } else if (userId) {
-      sessions = sessions.filter(s => s.traineeId === userId);
+      const filtered = sessions.filter(s => s.traineeId === userId);
+      return filtered.length > 0 ? filtered : sessions.slice(0, 2);
     }
 
     return sessions;
