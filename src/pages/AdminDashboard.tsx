@@ -62,6 +62,7 @@ import {
 } from '@/types/capacityConnect';
 import { AnimatedCounter } from '@/components/AnimatedCounter';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 
 interface PlatformUser {
@@ -76,9 +77,18 @@ interface PlatformUser {
 
 export default function AdminDashboard() {
   const { t } = useLanguage();
+  const { user } = useAuth();
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+
+  // Guard: Ensure only authenticated admins can view AdminDashboard
+  useEffect(() => {
+    if (user && (user.id === 'guest' || user.role !== 'admin')) {
+      toast.error(t('auth.adminRoleMissing', 'You do not have administrator access.'));
+      navigate('/auth?role=admin', { replace: true });
+    }
+  }, [user, navigate, t]);
 
   // Resolve current admin view from path
   type AdminView = 'overview' | 'students' | 'trainers' | 'jobs' | 'internships' | 'courses' | 'announcements' | 'security';
@@ -297,43 +307,61 @@ export default function AdminDashboard() {
     setTrainerApps(capacityStore.getTrainerApplications());
     setTrainers(capacityStore.getTrainers());
 
-    // Store approved trainer in Supabase trainer_logins table
+    // Update trainer approval status in Supabase trainer_profiles & profiles tables
     if (app) {
       try {
         const { supabase } = await import('@/integrations/supabase/client');
-        // Call RPC helper
-        await supabase.rpc('record_approved_trainer_login', {
-          p_application_id: app.id,
-          p_name: app.name,
-          p_username: app.username || app.email.split('@')[0],
-          p_email: app.email,
-          p_password: app.password || '123456',
-          p_approved_by: 'admin'
-        });
+        await supabase
+          .from('trainer_profiles')
+          .update({
+            approval_status: 'approved',
+            approved_at: new Date().toISOString()
+          })
+          .eq('email', app.email.toLowerCase());
 
-        // Direct upsert to trainer_logins table
-        await supabase.from('trainer_logins' as any).upsert({
-          application_id: app.id,
-          name: app.name,
-          username: (app.username || app.email.split('@')[0]).toLowerCase(),
-          email: app.email.toLowerCase(),
-          password_hash: app.password || '123456',
-          status: 'approved',
-          role: 'trainer',
-          approved_by: 'admin',
-          approved_at: new Date().toISOString()
-        }, { onConflict: 'email' });
+        await supabase
+          .from('profiles')
+          .update({
+            status: 'approved',
+            updated_at: new Date().toISOString()
+          })
+          .eq('email', app.email.toLowerCase());
       } catch (err) {
-        console.warn('Supabase trainer_logins sync note:', err);
+        console.warn('[AdminDashboard] Supabase trainer approval sync note:', err);
       }
     }
 
-    toast.success('Trainer application approved! Login credentials saved in Supabase trainer_logins.');
+    toast.success('Trainer application approved successfully!');
   };
 
-  const handleRejectTrainerApp = (appId: string) => {
+  const handleRejectTrainerApp = async (appId: string) => {
+    const app = capacityStore.getTrainerApplications().find(a => a.id === appId);
     capacityStore.rejectTrainerApplication(appId);
     setTrainerApps(capacityStore.getTrainerApplications());
+
+    if (app) {
+      try {
+        const { supabase } = await import('@/integrations/supabase/client');
+        await supabase
+          .from('trainer_profiles')
+          .update({
+            approval_status: 'rejected',
+            updated_at: new Date().toISOString()
+          })
+          .eq('email', app.email.toLowerCase());
+
+        await supabase
+          .from('profiles')
+          .update({
+            status: 'rejected',
+            updated_at: new Date().toISOString()
+          })
+          .eq('email', app.email.toLowerCase());
+      } catch (err) {
+        console.warn('[AdminDashboard] Supabase trainer rejection sync note:', err);
+      }
+    }
+
     toast.info('Trainer application declined.');
   };
 

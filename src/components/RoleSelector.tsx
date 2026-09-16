@@ -95,13 +95,13 @@ export const RoleSelector: React.FC<RoleSelectorProps> = ({ onComplete }) => {
       setLoginModalOpen(true);
       return;
     }
+    if (selectedRole === 'admin') {
+      navigate('/auth?role=admin');
+      return;
+    }
     loginAsGuest(selectedRole);
     onComplete(selectedRole);
-    if (selectedRole === 'admin') {
-      navigate('/admin');
-    } else {
-      navigate('/main');
-    }
+    navigate('/main');
   };
 
   return (

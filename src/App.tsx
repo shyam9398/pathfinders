@@ -94,117 +94,112 @@ const App = () => (
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/radar" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/sessions" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/trainees" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/courses" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/library" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/resources" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/doubts" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/clinic" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/reviews" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/capstones" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/trainer/analytics" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="trainer">
                     <TrainerDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/analytics" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/students" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/trainers" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/jobs" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/internships" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/courses" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/users" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/announcements" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
                 <Route path="/admin/security" element={
-                  <ProtectedRoute>
-                    <AdminDashboard />
-                  </ProtectedRoute>
-                } />
-                <Route path="/admin/analytics" element={
-                  <ProtectedRoute>
+                  <ProtectedRoute requiredRole="admin">
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />

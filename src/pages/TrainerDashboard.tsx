@@ -56,6 +56,14 @@ export default function TrainerDashboard() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
 
+  // Guard: Ensure only authenticated and approved trainers can view TrainerDashboard
+  useEffect(() => {
+    if (user && (user.id === 'guest' || user.role !== 'trainer')) {
+      toast.error(t('auth.trainerAccessDenied', 'Trainer access requires an approved trainer account.'));
+      navigate('/auth?role=trainer', { replace: true });
+    }
+  }, [user, navigate, t]);
+
   // Resolve dedicated page from URL path or search parameter
   type TrainerPage = 'overview' | 'radar' | 'sessions' | 'courses' | 'resources' | 'clinic' | 'capstones' | 'analytics';
 

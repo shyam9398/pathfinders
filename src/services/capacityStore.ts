@@ -742,35 +742,18 @@ class CapacityStore {
       this.saveTrainers(trainers);
     }
 
-    // Asynchronously synchronize to Supabase trainer_logins table
+    // Asynchronously synchronize approval to Supabase trainer_profiles table
     try {
       import('@/integrations/supabase/client').then(({ supabase }) => {
-        supabase.from('trainer_logins' as any).upsert({
-          application_id: app.id,
-          name: app.name,
-          username: (app.username || app.email.split('@')[0]).toLowerCase(),
-          email: app.email.toLowerCase(),
-          password_hash: app.password || '123456',
-          status: 'approved',
-          role: 'trainer',
-          approved_by: 'admin',
+        supabase.from('trainer_profiles' as any).update({
+          approval_status: 'approved',
           approved_at: new Date().toISOString()
-        }, { onConflict: 'email' }).then(({ error }) => {
-          if (error) console.log('Supabase trainer_logins sync note:', error.message);
+        }).eq('email', app.email.toLowerCase()).then(({ error }) => {
+          if (error) console.log('[capacityStore] Supabase trainer_profiles approval update note:', error.message);
         });
-
-        // Also call record_approved_trainer_login RPC
-        supabase.rpc('record_approved_trainer_login', {
-          p_application_id: app.id,
-          p_name: app.name,
-          p_username: (app.username || app.email.split('@')[0]).toLowerCase(),
-          p_email: app.email.toLowerCase(),
-          p_password: app.password || '123456',
-          p_approved_by: 'admin'
-        }).then(() => {});
-      }).catch(err => console.log('Supabase import note:', err));
+      }).catch(err => console.log('[capacityStore] Supabase import note:', err));
     } catch (e) {
-      console.log('Supabase trainer_logins sync catch:', e);
+      console.log('[capacityStore] Supabase sync catch:', e);
     }
 
     return app;

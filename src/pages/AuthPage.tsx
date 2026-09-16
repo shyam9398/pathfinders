@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 const AuthPage = () => {
-  const { signIn, signUp, loginAsGuest, setRole, loading } = useAuth();
+  const { signIn, signUp, loginAsGuest, loginAsAdmin, setRole, loading } = useAuth();
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -205,185 +205,147 @@ const AuthPage = () => {
 
     try {
       // -------------------------------------------------------------
-      // 1. ADMIN ROLE: Native Supabase Authentication & Profile Role Verification
+      // 1. ADMIN ROLE: Fixed Username & Password Authentication
       // -------------------------------------------------------------
       if (selectedRole === 'admin') {
-        let adminEmail = inputIdent;
+        const username = inputIdent.trim().toLowerCase();
+        const password = inputPass;
 
-        // Support username resolution: If input doesn't contain '@', resolve corresponding email from profiles
-        if (!inputIdent.includes('@')) {
-          try {
-            const { data: profileRow } = await supabase
-              .from('profiles')
-              .select('email')
-              .ilike('username', inputIdent)
-              .maybeSingle();
-
-            if (profileRow?.email) {
-              adminEmail = profileRow.email;
-            } else {
-              // Fallback domain format if username was entered directly without resolution
-              adminEmail = `${inputIdent}@pathfinder.org`;
-            }
-          } catch (lookupErr) {
-            console.warn('[Admin Auth] Username resolution error:', lookupErr);
-          }
-        }
-
-        // Native Supabase Authentication using email + password
-        const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-          email: adminEmail,
-          password: inputPass
-        });
-
-        if (authError || !authData?.user) {
-          const errMsg = authError?.message || '';
-          if (
-            errMsg.toLowerCase().includes('network') || 
-            errMsg.toLowerCase().includes('fetch') || 
-            errMsg.toLowerCase().includes('failed to connect')
-          ) {
-            setError(t('auth.networkError', 'Unable to connect to the authentication service.'));
-          } else {
-            setError(t('auth.invalidCredentials', 'Invalid email or password.'));
-          }
+        if (username === 'pathfinder' && password === '123456') {
+          loginAsAdmin();
+          toast.success(t('auth.adminLoginSuccess', 'Administrator authenticated successfully.'));
+          navigate('/admin', { replace: true });
+          setIsLoading(false);
+          return;
+        } else {
+          setError(t('auth.invalidCredentials', 'Invalid username or password.'));
           setIsLoading(false);
           return;
         }
-
-        // Query user's database profile to verify administrative privileges
-        const { data: profile, error: profileErr } = await supabase
-          .from('profiles')
-          .select('id, role, status, full_name')
-          .eq('id', authData.user.id)
-          .maybeSingle();
-
-        const userRole = profile?.role || authData.user.user_metadata?.role;
-
-        // Verify role = 'admin'
-        if (userRole !== 'admin') {
-          // Explicit rejection: non-admin user attempting admin login
-          await supabase.auth.signOut();
-          setError(t('auth.adminRoleMissing', 'You do not have administrator access.'));
-          setIsLoading(false);
-          return;
-        }
-
-        // Verify account approval status
-        if (profile?.status && profile.status !== 'approved' && profile.status !== 'active') {
-          await supabase.auth.signOut();
-          setError(t('auth.adminNotApproved', 'Your administrator account is not approved.'));
-          setIsLoading(false);
-          return;
-        }
-
-        // Admin successfully authenticated & role verified from database!
-        setRole('admin');
-        toast.success(t('auth.adminLoginSuccess', 'Administrator authenticated successfully.'));
-        navigate('/admin', { replace: true });
-        setIsLoading(false);
-        return;
       }
 
       // -------------------------------------------------------------
-      // 2. TRAINER ROLE: Verification from Supabase trainer_logins
+      // 2. TRAINER ROLE: Supabase Auth & Approved Trainer Verification
       // -------------------------------------------------------------
       if (selectedRole === 'trainer') {
-        let trainerVerified = false;
+        let trainerEmail = inputIdent;
 
-        // A. Verify via Supabase RPC
-        try {
-          const { data: rpcData, error: rpcError } = await supabase.rpc('verify_platform_login', {
-            p_identifier: inputIdent,
-            p_password: inputPass,
-            p_role: 'trainer'
+        // A. If username without @, lookup email from profiles or RPC
+        if (!inputIdent.includes('@')) {
+          try {
+            const { data: rpcEmail } = await supabase.rpc('get_auth_email_by_identifier', {
+              p_identifier: inputIdent
+            });
+            if (rpcEmail) {
+              trainerEmail = rpcEmail;
+            } else {
+              const { data: profileRow } = await supabase
+                .from('profiles')
+                .select('email')
+                .ilike('username', inputIdent)
+                .maybeSingle();
+
+              if (profileRow?.email) {
+                trainerEmail = profileRow.email;
+              }
+            }
+          } catch (lookupErr) {
+            console.warn('[Trainer Auth] Profile lookup note:', lookupErr);
+          }
+        }
+
+        // B. Attempt Supabase native authentication
+        let authUser: any = null;
+        if (trainerEmail.includes('@')) {
+          const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
+            email: trainerEmail,
+            password: inputPass
           });
 
-          if (!rpcError && rpcData && (rpcData as any).success) {
-            trainerVerified = true;
-          } else if (rpcData && (rpcData as any).error) {
-            const status = (rpcData as any).status;
-            if (status === 'pending') {
-              setError('Your trainer application is pending Administrator review.');
-              setIsLoading(false);
-              return;
-            } else if (status === 'invalid_password') {
-              setError('Incorrect password for this trainer account.');
-              setIsLoading(false);
-              return;
-            }
-          }
-        } catch (e) {
-          console.warn('Supabase RPC trainer verification note:', e);
-        }
-
-        // B. Check Supabase trainer_logins table directly
-        if (!trainerVerified) {
-          try {
-            const { data: trainerRows, error: tErr } = await supabase
-              .from('trainer_logins' as any)
-              .select('*')
-              .or(`username.ilike.${inputIdent},email.ilike.${inputIdent}`)
-              .limit(1);
-
-            if (!tErr && trainerRows && trainerRows.length > 0) {
-              const rec = trainerRows[0] as any;
-              if (rec.status !== 'approved') {
-                setError(`Trainer application status is ${rec.status}. Awaiting Administrator approval.`);
-                setIsLoading(false);
-                return;
-              }
-              if (rec.password_hash === inputPass || rec.raw_password === inputPass) {
-                trainerVerified = true;
-              }
-            }
-          } catch (e) {
-            console.warn('Supabase trainer_logins table note:', e);
+          if (!authErr && authData?.user) {
+            authUser = authData.user;
           }
         }
 
-        // C. Fallback check on capacityStore approved applications
-        if (!trainerVerified) {
+        // C. If Supabase Auth failed, check local capacityStore applications
+        if (!authUser) {
           const localVerif = capacityStore.verifyTrainerLogin(inputIdent, inputPass);
-          if (localVerif.success) {
-            trainerVerified = true;
+          if (localVerif.success && localVerif.status === 'approved') {
+            setRole('trainer');
+            navigate('/trainer', { replace: true });
+            setIsLoading(false);
+            return;
+          } else if (localVerif.status === 'pending') {
+            setError('Your trainer application is pending Administrator review.');
+            setIsLoading(false);
+            return;
+          } else if (localVerif.status === 'rejected' || localVerif.status === 'suspended') {
+            setError('Your trainer application was declined by the administrator.');
+            setIsLoading(false);
+            return;
           } else {
-            setError(localVerif.error || 'Trainer credentials invalid or pending administrator approval.');
+            setError(t('auth.invalidCredentials', 'Invalid email or password.'));
             setIsLoading(false);
             return;
           }
         }
 
-        // Trainer successfully verified!
+        // D. Supabase Auth succeeded: verify approval_status = 'approved'
+        const { data: trainerRow } = await supabase
+          .from('trainer_profiles')
+          .select('approval_status')
+          .or(`user_id.eq.${authUser.id},email.eq.${trainerEmail.toLowerCase()}`)
+          .maybeSingle();
+
+        const { data: userProfile } = await supabase
+          .from('profiles')
+          .select('role, status')
+          .eq('id', authUser.id)
+          .maybeSingle();
+
+        const status = trainerRow?.approval_status || userProfile?.status || authUser.user_metadata?.approval_status || 'pending';
+
+        if (status === 'pending') {
+          await supabase.auth.signOut();
+          setError('Your trainer application is pending Administrator review.');
+          setIsLoading(false);
+          return;
+        } else if (status === 'rejected' || status === 'suspended') {
+          await supabase.auth.signOut();
+          setError(`Trainer application status is ${status}. Access denied.`);
+          setIsLoading(false);
+          return;
+        } else if (status !== 'approved' && status !== 'active') {
+          await supabase.auth.signOut();
+          setError('Your trainer application is pending Administrator review.');
+          setIsLoading(false);
+          return;
+        }
+
+        // Only approved trainer can access /trainer
         setRole('trainer');
-        loginAsGuest('trainer');
         navigate('/trainer', { replace: true });
         setIsLoading(false);
         return;
       }
 
       // -------------------------------------------------------------
-      // 3. TRAINEE ROLE: Standard platform login
+      // 3. TRAINEE ROLE: Standard platform login (Supabase Auth)
       // -------------------------------------------------------------
       setRole('trainee');
       const { error: authError } = await signIn(inputIdent, inputPass);
 
+      // Wrong credentials must show an error and stay on the login page
       if (authError) {
-        console.warn('Supabase signIn note:', authError.message);
-        loginAsGuest('trainee');
-      } else {
-        loginAsGuest('trainee');
+        setError(t('auth.invalidCredentials', 'Invalid email or password.'));
+        setIsLoading(false);
+        return;
       }
 
       navigate('/main', { replace: true });
     } catch (err: any) {
       console.error('Authentication exception:', err);
-      if (selectedRole === 'admin') {
-        setError(t('auth.networkError', 'Unable to connect to the authentication service.'));
-      } else {
-        loginAsGuest(selectedRole);
-        navigate(selectedRole === 'trainer' ? '/trainer' : '/main', { replace: true });
-      }
+      setError(t('auth.networkError', 'Unable to connect to the authentication service.'));
     } finally {
       setIsLoading(false);
     }
@@ -415,23 +377,20 @@ const AuthPage = () => {
 
     try {
       const { error } = await signUp(signupData.email, signupData.password, signupData.name, language, signupData.role);
+      
+      // Never treat signup errors as successful registration
       if (error) {
-        // In local/demo mode without email confirmation requirement
-        setSuccess(`Account registered as ${signupData.role.toUpperCase()}! You can now sign in.`);
-        setTimeout(() => {
-          loginAsGuest(signupData.role);
-          if (signupData.role === 'trainer') navigate('/trainer');
-          else navigate('/main');
-        }, 1200);
-      } else {
-        setSuccess(`Account created as ${signupData.role.toUpperCase()}! Redirecting to workspace...`);
-        setSignupData({ name: '', email: '', password: '', confirmPassword: '', role: 'trainee' });
-        setTimeout(() => {
-          loginAsGuest(signupData.role);
-          if (signupData.role === 'trainer') navigate('/trainer');
-          else navigate('/main');
-        }, 1200);
+        setError(error.message || t('auth.signupError', 'Failed to create account'));
+        setIsLoading(false);
+        return;
       }
+
+      // Account successfully registered
+      setSuccess(`Account registered as ${signupData.role.toUpperCase()}! Please sign in with your credentials.`);
+      setSignupData({ name: '', email: '', password: '', confirmPassword: '', role: 'trainee' });
+      setTimeout(() => {
+        setActiveTab('login');
+      }, 1500);
     } catch (err: any) {
       setError(err.message || t('auth.signupError', 'Failed to create account'));
     } finally {
@@ -573,10 +532,10 @@ const AuthPage = () => {
                   <div className="p-3 mb-5 rounded-xl bg-purple-50/80 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 text-center space-y-1">
                     <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-purple-900 dark:text-purple-200">
                       <ShieldCheck className="w-4 h-4 text-purple-600 dark:text-purple-400" />
-                      <span>Administrator Portal (Login Only)</span>
+                      <span>Administrator Portal</span>
                     </div>
                     <p className="text-[11px] text-purple-700 dark:text-purple-300">
-                      Platform governance access is restricted. Pre-authorized admin credentials only. Sign up is unavailable.
+                      Sign in with administrator username and password.
                     </p>
                   </div>
                 ) : selectedRole === 'trainer' ? (
@@ -734,7 +693,7 @@ const AuthPage = () => {
                       <div className="space-y-1.5">
                         <Label htmlFor="login-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
                           {selectedRole === 'admin' 
-                            ? t('auth.adminEmailOrUsername', 'Administrator Email or Username') 
+                            ? 'Username' 
                             : selectedRole === 'trainer' 
                             ? 'Trainer Username or Email' 
                             : t('auth.email', 'Email Address')}
@@ -744,7 +703,7 @@ const AuthPage = () => {
                           type="text"
                           placeholder={
                             selectedRole === 'admin'
-                              ? 'admin@pathfinder.org or username'
+                              ? 'Enter username (pathfinder)'
                               : selectedRole === 'trainer'
                               ? 'e.g. your approved username or email'
                               : 'you@example.com'
@@ -753,6 +712,7 @@ const AuthPage = () => {
                           onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
                           className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600"
                           required
+                          autoComplete={selectedRole === 'admin' ? 'username' : 'email'}
                         />
                       </div>
 
@@ -766,11 +726,12 @@ const AuthPage = () => {
                           <Input
                             id="login-password"
                             type={showPassword ? 'text' : 'password'}
-                            placeholder="••••••••"
+                            placeholder={selectedRole === 'admin' ? 'Enter password (123456)' : '••••••••'}
                             value={loginData.password}
                             onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
                             className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600 pr-10"
                             required
+                            autoComplete="current-password"
                           />
                           <button
                             type="button"
@@ -792,8 +753,8 @@ const AuthPage = () => {
                     </form>
                   )}
 
-                  {/* Instant Demo Role Preview - ONLY for Trainee (Admin demo bypass strictly removed) */}
-                  {selectedRole !== 'admin' && (
+                  {/* Instant Demo Role Preview - ONLY for Trainee */}
+                  {selectedRole === 'trainee' && (
                     <>
                       <div className="relative my-3">
                         <div className="absolute inset-0 flex items-center">
@@ -806,7 +767,7 @@ const AuthPage = () => {
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-2 gap-2">
+                      <div className="grid grid-cols-1 gap-2">
                         <Button
                           type="button"
                           variant="outline"
@@ -817,19 +778,7 @@ const AuthPage = () => {
                           }}
                           className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:text-blue-600 font-semibold"
                         >
-                          🎓 Trainee Preview
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            loginAsGuest('trainer');
-                            navigate('/trainer');
-                          }}
-                          className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600 font-semibold"
-                        >
-                          👨‍🏫 Trainer Preview
+                          🎓 Explore Trainee Portal Preview
                         </Button>
                       </div>
                     </>

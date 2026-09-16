@@ -20,6 +20,7 @@ interface AuthContextType {
   setRole: (role: UserRole) => void;
   loading: boolean;
   loginAsGuest: (guestRole?: UserRole) => void;
+  loginAsAdmin: () => void;
   signUp: (email: string, password: string, name: string, language: Language, role?: UserRole) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -37,7 +38,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const createGuestUser = (targetRole: UserRole): User => {
     const lang = (localStorage.getItem('user_language') as Language) || 'en';
-    // Admin role requires authenticated Supabase session - never grant to guest
+    // Admin role requires authenticated admin session - never grant to guest
     const safeRole: UserRole = targetRole === 'admin' ? 'trainee' : targetRole;
     const names: Record<UserRole, string> = {
       trainee: 'Pavan Kumar (Trainee)',
@@ -54,10 +55,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const [role, setRoleState] = useState<UserRole>(() => {
+    try {
+      const savedAdmin = localStorage.getItem('pathfinders_admin_user');
+      if (savedAdmin) return 'admin';
+    } catch {}
     const init = getInitialRole();
-    return init === 'admin' ? 'trainee' : init;
+    return init;
   });
   const [user, setUser] = useState<User | null>(() => {
+    try {
+      const savedAdmin = localStorage.getItem('pathfinders_admin_user');
+      if (savedAdmin) {
+        return JSON.parse(savedAdmin);
+      }
+    } catch {}
     const hasRoleSelected = localStorage.getItem('cc_role_selected') === 'true';
     if (hasRoleSelected) {
       const init = getInitialRole();
@@ -106,6 +117,22 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     localStorage.setItem('cc_role_selected', 'true');
   };
 
+  const loginAsAdmin = () => {
+    const lang = (localStorage.getItem('user_language') as Language) || 'en';
+    const adminUser: User = {
+      id: 'admin_pathfinder',
+      email: 'admin@pathfinder.org',
+      name: 'System Administrator',
+      language: lang,
+      role: 'admin'
+    };
+    capacityStore.setActiveRole('admin');
+    setRoleState('admin');
+    setUser(adminUser);
+    localStorage.setItem('cc_role_selected', 'true');
+    localStorage.setItem('pathfinders_admin_user', JSON.stringify(adminUser));
+  };
+
   useEffect(() => {
     let isMounted = true;
 
@@ -129,7 +156,10 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               if (isMounted) fetchUserProfile(session.user.id);
             }, 0);
           } else {
-            setUser(null);
+            const savedAdmin = localStorage.getItem('pathfinders_admin_user');
+            if (!savedAdmin) {
+              setUser(null);
+            }
           }
           setLoading(false);
           clearTimeout(safetyTimeout);
@@ -145,14 +175,34 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setSession(session);
         if (session?.user) {
           fetchUserProfile(session.user.id);
+        } else {
+          const savedAdmin = localStorage.getItem('pathfinders_admin_user');
+          if (savedAdmin) {
+            try {
+              const parsed = JSON.parse(savedAdmin);
+              setUser(parsed);
+              setRoleState('admin');
+              capacityStore.setActiveRole('admin');
+            } catch {}
+          }
         }
         setLoading(false);
         clearTimeout(safetyTimeout);
       }).catch((err) => {
         if (!isMounted) return;
         console.error('[AuthContext] getSession failed:', err);
-        setSession(null);
-        setUser(null);
+        const savedAdmin = localStorage.getItem('pathfinders_admin_user');
+        if (savedAdmin) {
+          try {
+            const parsed = JSON.parse(savedAdmin);
+            setUser(parsed);
+            setRoleState('admin');
+            capacityStore.setActiveRole('admin');
+          } catch {}
+        } else {
+          setSession(null);
+          setUser(null);
+        }
         setLoading(false);
         clearTimeout(safetyTimeout);
       });
@@ -269,8 +319,12 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const signOut = async () => {
     try {
       localStorage.removeItem('cc_role_selected');
-      const { error } = await supabase.auth.signOut();
-      if (error) console.error('SignOut error:', error);
+      localStorage.removeItem('pathfinders_admin_user');
+      try {
+        await supabase.auth.signOut();
+      } catch (e) {
+        console.warn('SignOut error:', e);
+      }
       setUser(null);
       setSession(null);
       setRoleState('trainee');
@@ -306,6 +360,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setRole,
     loading,
     loginAsGuest,
+    loginAsAdmin,
     signUp,
     signIn,
     signOut,

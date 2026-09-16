@@ -1,23 +1,22 @@
 -- ============================================================================
--- CAPACITY CONNECT / PATHFINDER: SUPABASE AUTH & ADMIN SETUP (OFFICIAL)
+-- MIGRATION: FIX ADMIN AUTHENTICATION, PROFILES & RLS SECURITY
 -- ============================================================================
--- Run this script in your Supabase Dashboard -> SQL Editor
--- Features:
--- 1. Sets up the Administrator account in Supabase Auth (auth.users)
---    Username: pathfinder
---    Password: stored encrypted with pgcrypto / bcrypt
---    Email: admin@pathfinder.org
--- 2. Sets up public.profiles table referencing auth.users(id)
---    with role = 'admin', status = 'active'
+-- 1. Sets up public.profiles referencing auth.users
+-- 2. Sets up secure RLS policies for profiles, admin_actions, and trainer_profiles
 -- 3. Sets up get_auth_email_by_identifier RPC for secure username login lookup
--- 4. Sets up strict Row Level Security (RLS) for profiles, trainer_profiles, and admin_actions
--- 5. Removes obsolete plaintext credential tables (admin_logins, trainer_logins)
+-- 4. Provisions administrator:
+--    Username: pathfinder
+--    Password: 123456
+--    Email: admin@pathfinder.org
+--    Role: admin
+--    Status: active
+-- 5. Removes deprecated plaintext credential tables (admin_logins, trainer_logins)
 -- ============================================================================
 
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
--- 1. Create or verify profiles table
+-- 1. Ensure profiles table structure
 CREATE TABLE IF NOT EXISTS public.profiles (
   id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
   full_name VARCHAR(255) NOT NULL DEFAULT 'User',
@@ -188,7 +187,7 @@ CREATE POLICY "Admins can view and manage admin_actions"
   USING (public.is_admin())
   WITH CHECK (public.is_admin());
 
--- 6. Trigger for automatic profile creation on Supabase Auth signup
+-- 6. Trigger to automatically populate public.profiles on Supabase auth.users creation
 CREATE OR REPLACE FUNCTION public.handle_new_auth_user()
 RETURNS TRIGGER
 LANGUAGE plpgsql
@@ -281,7 +280,7 @@ BEGIN
   WHERE username = v_admin_username OR email = v_admin_email;
 END $$;
 
--- 8. Clean up obsolete plaintext tables
+-- 8. Clean up deprecated plaintext tables
 DROP TABLE IF EXISTS public.admin_logins CASCADE;
 DROP TABLE IF EXISTS public.trainer_logins CASCADE;
 DROP FUNCTION IF EXISTS public.verify_platform_login(TEXT, TEXT, TEXT) CASCADE;
