@@ -17,7 +17,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 const AuthPage = () => {
-  const { signIn, signUp, loginAsGuest, loginAsAdmin, setRole, loading } = useAuth();
+  const { signIn, signUp, loginAsGuest, loginAsAdmin, loginAsTrainer, loginAsTrainee, setRole, loading } = useAuth();
   const { t, language } = useLanguage();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -225,124 +225,56 @@ const AuthPage = () => {
       }
 
       // -------------------------------------------------------------
-      // 2. TRAINER ROLE: Supabase Auth & Approved Trainer Verification
+      // 2. TRAINER ROLE: Fixed Username & Password Authentication
       // -------------------------------------------------------------
       if (selectedRole === 'trainer') {
-        let trainerEmail = inputIdent;
-
-        // A. If username without @, lookup email from profiles or RPC
-        if (!inputIdent.includes('@')) {
-          try {
-            const { data: rpcEmail } = await supabase.rpc('get_auth_email_by_identifier', {
-              p_identifier: inputIdent
-            });
-            if (rpcEmail) {
-              trainerEmail = rpcEmail;
-            } else {
-              const { data: profileRow } = await supabase
-                .from('profiles')
-                .select('email')
-                .ilike('username', inputIdent)
-                .maybeSingle();
-
-              if (profileRow?.email) {
-                trainerEmail = profileRow.email;
-              }
-            }
-          } catch (lookupErr) {
-            console.warn('[Trainer Auth] Profile lookup note:', lookupErr);
-          }
-        }
-
-        // B. Attempt Supabase native authentication
-        let authUser: any = null;
-        if (trainerEmail.includes('@')) {
-          const { data: authData, error: authErr } = await supabase.auth.signInWithPassword({
-            email: trainerEmail,
-            password: inputPass
+        const res = capacityStore.verifyTrainerLogin(inputIdent, inputPass);
+        if (res.success && res.status === 'approved') {
+          loginAsTrainer({
+            id: res.trainer?.id || 'trainer_user',
+            email: res.trainer?.email || (inputIdent.includes('@') ? inputIdent : `${inputIdent}@pathfinder.org`),
+            name: res.trainer?.name || (inputIdent.toLowerCase() === 'trainer' ? 'Dr. Priya Sharma (Trainer)' : inputIdent)
           });
-
-          if (!authErr && authData?.user) {
-            authUser = authData.user;
-          }
-        }
-
-        // C. If Supabase Auth failed, check local capacityStore applications
-        if (!authUser) {
-          const localVerif = capacityStore.verifyTrainerLogin(inputIdent, inputPass);
-          if (localVerif.success && localVerif.status === 'approved') {
-            setRole('trainer');
-            navigate('/trainer', { replace: true });
-            setIsLoading(false);
-            return;
-          } else if (localVerif.status === 'pending') {
-            setError('Your trainer application is pending Administrator review.');
-            setIsLoading(false);
-            return;
-          } else if (localVerif.status === 'rejected' || localVerif.status === 'suspended') {
-            setError('Your trainer application was declined by the administrator.');
-            setIsLoading(false);
-            return;
-          } else {
-            setError(t('auth.invalidCredentials', 'Invalid email or password.'));
-            setIsLoading(false);
-            return;
-          }
-        }
-
-        // D. Supabase Auth succeeded: verify approval_status = 'approved'
-        const { data: trainerRow } = await supabase
-          .from('trainer_profiles')
-          .select('approval_status')
-          .or(`user_id.eq.${authUser.id},email.eq.${trainerEmail.toLowerCase()}`)
-          .maybeSingle();
-
-        const { data: userProfile } = await supabase
-          .from('profiles')
-          .select('role, status')
-          .eq('id', authUser.id)
-          .maybeSingle();
-
-        const status = trainerRow?.approval_status || userProfile?.status || authUser.user_metadata?.approval_status || 'pending';
-
-        if (status === 'pending') {
-          await supabase.auth.signOut();
+          toast.success(`Welcome back, Trainer ${res.trainer?.name || inputIdent}!`);
+          navigate('/trainer', { replace: true });
+          setIsLoading(false);
+          return;
+        } else if (res.status === 'pending') {
           setError('Your trainer application is pending Administrator review.');
           setIsLoading(false);
           return;
-        } else if (status === 'rejected' || status === 'suspended') {
-          await supabase.auth.signOut();
-          setError(`Trainer application status is ${status}. Access denied.`);
+        } else if (res.status === 'rejected' || res.status === 'suspended') {
+          setError('Your trainer application was declined by the administrator.');
           setIsLoading(false);
           return;
-        } else if (status !== 'approved' && status !== 'active') {
-          await supabase.auth.signOut();
-          setError('Your trainer application is pending Administrator review.');
+        } else {
+          setError(res.error || t('auth.invalidCredentials', 'Invalid username or password. Default trainer username: trainer, password: 123456'));
           setIsLoading(false);
           return;
         }
-
-        // Only approved trainer can access /trainer
-        setRole('trainer');
-        navigate('/trainer', { replace: true });
-        setIsLoading(false);
-        return;
       }
 
       // -------------------------------------------------------------
-      // 3. TRAINEE ROLE: Standard platform login (Supabase Auth)
+      // 3. TRAINEE ROLE: Fixed Username & Password Authentication
       // -------------------------------------------------------------
-      setRole('trainee');
-      const { error: authError } = await signIn(inputIdent, inputPass);
-
-      // Wrong credentials must show an error and stay on the login page
-      if (authError) {
-        setError(t('auth.invalidCredentials', 'Invalid email or password.'));
-        setIsLoading(false);
-        return;
+      if (selectedRole === 'trainee') {
+        const res = capacityStore.verifyTraineeLogin(inputIdent, inputPass);
+        if (res.success) {
+          loginAsTrainee({
+            id: 'trainee_user',
+            email: res.email || (inputIdent.includes('@') ? inputIdent : `${inputIdent}@student.edu`),
+            name: res.name || 'Pavan Kumar (Trainee)'
+          });
+          toast.success(t('auth.loginSuccess', 'Signed in successfully.'));
+          navigate('/main', { replace: true });
+          setIsLoading(false);
+          return;
+        } else {
+          setError(res.error || t('auth.invalidCredentials', 'Invalid username or password. Default trainee username: trainee, password: 123456'));
+          setIsLoading(false);
+          return;
+        }
       }
-
-      navigate('/main', { replace: true });
     } catch (err: any) {
       console.error('Authentication exception:', err);
       setError(t('auth.networkError', 'Unable to connect to the authentication service.'));
@@ -539,23 +471,24 @@ const AuthPage = () => {
                     </p>
                   </div>
                 ) : selectedRole === 'trainer' ? (
-                  <div className="p-5 mb-5 rounded-2xl bg-gradient-to-b from-emerald-50 via-teal-50/60 to-emerald-50/40 dark:from-emerald-950/50 dark:via-teal-950/30 dark:to-emerald-950/20 border-2 border-emerald-300 dark:border-emerald-800 text-center space-y-4 shadow-sm">
-                    <div className="flex items-center justify-center gap-2 text-xs font-extrabold text-emerald-900 dark:text-emerald-200">
-                      <GraduationCap className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
-                      <span className="text-sm">Accredited Trainer Portal (Approval Required)</span>
+                  <div className="p-3.5 mb-5 rounded-xl bg-emerald-50/80 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 text-center space-y-1.5">
+                    <div className="flex items-center justify-center gap-1.5 text-xs font-bold text-emerald-900 dark:text-emerald-200">
+                      <GraduationCap className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                      <span>Accredited Trainer Portal</span>
                     </div>
-                    <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed max-w-sm mx-auto">
-                      Trainers must submit an accreditation request and receive Administrator approval before signing in.
+                    <p className="text-[11px] text-emerald-700 dark:text-emerald-300">
+                      Sign in with trainer username and password or apply below.
                     </p>
-                    <Button
-                      type="button"
-                      size="lg"
-                      onClick={() => setTrainerApplyModalOpen(true)}
-                      className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-base py-4 h-auto rounded-xl shadow-md hover:shadow-lg transition-all transform active:scale-[0.99] flex items-center justify-center gap-2.5 border border-emerald-400/40"
-                    >
-                      <UserPlus className="w-5 h-5" />
-                      <span>Apply to Become a Trainer</span>
-                    </Button>
+                    <div className="pt-0.5">
+                      <button
+                        type="button"
+                        onClick={() => setTrainerApplyModalOpen(true)}
+                        className="text-xs text-emerald-700 dark:text-emerald-300 font-bold hover:underline inline-flex items-center gap-1"
+                      >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        Apply to Become an Accredited Trainer
+                      </button>
+                    </div>
                   </div>
                 ) : (
                   <TabsList className="grid w-full grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl mb-6">
@@ -570,219 +503,133 @@ const AuthPage = () => {
                   </TabsList>
                 )}
 
-                {/* Login Form / Pending Processing View */}
+                {/* Login Form */}
                 <TabsContent value="login" className="space-y-4 m-0">
-                  {selectedRole === 'trainer' && !trainerApproved ? (
-                    trainerApplicant.status === 'pending' ? (
-                      /* Processing State Card when Application is Pending */
-                      <div className="p-5 rounded-2xl bg-amber-500/10 border-2 border-amber-400/50 dark:border-amber-700/60 text-center space-y-3.5 animate-in fade-in duration-200">
-                        <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-xs">
-                          <Clock className="w-6 h-6 animate-pulse" />
-                        </div>
-                        
-                        <div className="space-y-1">
-                          <h4 className="text-base font-extrabold text-amber-900 dark:text-amber-200">
-                            Your Request is Processing
-                          </h4>
-                          <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed max-w-xs mx-auto">
-                            Your trainer accreditation request has been submitted and is currently under review by the platform administrator.
-                          </p>
-                        </div>
+                  <form onSubmit={handleLogin} className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="login-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                        {selectedRole === 'admin' 
+                          ? 'Admin Username' 
+                          : selectedRole === 'trainer' 
+                          ? 'Trainer Username' 
+                          : 'Trainee Username or Email'}
+                      </Label>
+                      <Input
+                        id="login-email"
+                        type="text"
+                        placeholder={
+                          selectedRole === 'admin'
+                            ? 'Enter username (pathfinder)'
+                            : selectedRole === 'trainer'
+                            ? 'Enter username (trainer)'
+                            : 'Enter username (trainee)'
+                        }
+                        value={loginData.email}
+                        onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
+                        className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600"
+                        required
+                        autoComplete="username"
+                      />
+                    </div>
 
-                        <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-xl border border-amber-200 dark:border-amber-900/70 text-xs text-left space-y-1.5">
-                          <div className="flex justify-between text-slate-500">
-                            <span>Status:</span>
-                            <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
-                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
-                              Awaiting Admin Approval
-                            </span>
-                          </div>
-                          {trainerApplicant.email && (
-                            <div className="flex justify-between text-slate-500">
-                              <span>Applicant:</span>
-                              <span className="font-semibold text-slate-800 dark:text-slate-200">{trainerApplicant.name || trainerApplicant.email}</span>
-                            </div>
-                          )}
-                        </div>
-
-                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                          Username and password login fields will unlock automatically once approved by the administrator.
-                        </p>
-
-                        <div className="pt-1 flex flex-col gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            onClick={handleCheckTrainerApproval}
-                            className="w-full text-xs font-semibold rounded-xl border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 h-9"
-                          >
-                            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
-                            Check Approval Status Now
-                          </Button>
-
-                          <button
-                            type="button"
-                            onClick={handleUnlockForSeedTrainer}
-                            className="text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline"
-                          >
-                            Approved Admin/Seed Trainer? Unlock Credentials
-                          </button>
-                        </div>
-                      </div>
-                    ) : (
-                      /* Informational Restricted Card with Status Check */
-                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-3.5">
-                        <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200 dark:border-amber-800">
-                          <ShieldAlert className="w-5 h-5" />
-                        </div>
-                        <div className="space-y-1">
-                          <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
-                            Sign-In Locked Until Admin Approval
-                          </h4>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
-                            Username and password inputs will only be shown after an administrator approves your request. Already submitted an application?
-                          </p>
-                        </div>
-
-                        <form onSubmit={handleLookupTrainerStatus} className="space-y-2 pt-2 border-t border-slate-200/80 dark:border-slate-800">
-                          <div className="flex gap-2">
-                            <Input
-                              placeholder="Enter username or email to check"
-                              value={trainerLookupInput}
-                              onChange={(e) => {
-                                setTrainerLookupInput(e.target.value);
-                                setTrainerStatusMsg(null);
-                              }}
-                              className="h-9 text-xs rounded-xl"
-                            />
-                            <Button
-                              type="submit"
-                              size="sm"
-                              className="h-9 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shrink-0"
-                            >
-                              Check Status
-                            </Button>
-                          </div>
-                          {trainerStatusMsg && (
-                            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">{trainerStatusMsg}</p>
-                          )}
-                        </form>
-
-                        <div className="pt-1">
-                          <button
-                            type="button"
-                            onClick={handleUnlockForSeedTrainer}
-                            className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold hover:underline"
-                          >
-                            Existing Approved Trainer? Unlock Sign In
-                          </button>
-                        </div>
-                      </div>
-                    )
-                  ) : (
-                    /* Active Login Form (Shown when Approved or for Trainee/Admin) */
-                    <form onSubmit={handleLogin} className="space-y-4">
-                      {selectedRole === 'trainer' && trainerApproved && (
-                        <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
-                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
-                          <span><strong>Approved Trainer:</strong> Credentials unlocked. Enter password to sign in.</span>
-                        </div>
-                      )}
-
-                      <div className="space-y-1.5">
-                        <Label htmlFor="login-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                          {selectedRole === 'admin' 
-                            ? 'Username' 
-                            : selectedRole === 'trainer' 
-                            ? 'Trainer Username or Email' 
-                            : t('auth.email', 'Email Address')}
+                    <div className="space-y-1.5">
+                      <div className="flex items-center justify-between">
+                        <Label htmlFor="login-password" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {t('auth.password', 'Password')}
                         </Label>
+                      </div>
+                      <div className="relative">
                         <Input
-                          id="login-email"
-                          type="text"
-                          placeholder={
-                            selectedRole === 'admin'
-                              ? 'Enter username (pathfinder)'
-                              : selectedRole === 'trainer'
-                              ? 'e.g. your approved username or email'
-                              : 'you@example.com'
-                          }
-                          value={loginData.email}
-                          onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
-                          className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600"
+                          id="login-password"
+                          type={showPassword ? 'text' : 'password'}
+                          placeholder="Enter password (123456)"
+                          value={loginData.password}
+                          onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
+                          className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600 pr-10"
                           required
-                          autoComplete={selectedRole === 'admin' ? 'username' : 'email'}
+                          autoComplete="current-password"
                         />
-                      </div>
-
-                      <div className="space-y-1.5">
-                        <div className="flex items-center justify-between">
-                          <Label htmlFor="login-password" className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                            {t('auth.password', 'Password')}
-                          </Label>
-                        </div>
-                        <div className="relative">
-                          <Input
-                            id="login-password"
-                            type={showPassword ? 'text' : 'password'}
-                            placeholder={selectedRole === 'admin' ? 'Enter password (123456)' : '••••••••'}
-                            value={loginData.password}
-                            onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
-                            className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600 pr-10"
-                            required
-                            autoComplete="current-password"
-                          />
-                          <button
-                            type="button"
-                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                            onClick={() => setShowPassword(!showPassword)}
-                          >
-                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                          </button>
-                        </div>
-                      </div>
-
-                      <Button 
-                        type="submit" 
-                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-10 rounded-xl shadow-xs transition-all" 
-                        disabled={isLoading}
-                      >
-                        {isLoading ? (t('common.loading', 'Verifying...')) : (t('auth.loginButton', 'Sign In'))}
-                      </Button>
-                    </form>
-                  )}
-
-                  {/* Instant Demo Role Preview - ONLY for Trainee */}
-                  {selectedRole === 'trainee' && (
-                    <>
-                      <div className="relative my-3">
-                        <div className="absolute inset-0 flex items-center">
-                          <div className="w-full border-t border-slate-200 dark:border-slate-800" />
-                        </div>
-                        <div className="relative flex justify-center text-[10px] uppercase">
-                          <span className="bg-white dark:bg-slate-900 px-2 text-slate-400 font-semibold">
-                            Explore demo preview
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-2">
-                        <Button
+                        <button
                           type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            loginAsGuest('trainee');
-                            navigate('/main');
-                          }}
-                          className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:text-blue-600 font-semibold"
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                          onClick={() => setShowPassword(!showPassword)}
                         >
-                          🎓 Explore Trainee Portal Preview
-                        </Button>
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
                       </div>
-                    </>
-                  )}
+                    </div>
+
+                    <Button 
+                      type="submit" 
+                      className={`w-full font-semibold h-10 rounded-xl shadow-xs transition-all ${
+                        selectedRole === 'admin' 
+                          ? 'bg-purple-600 hover:bg-purple-700 text-white' 
+                          : selectedRole === 'trainer' 
+                          ? 'bg-emerald-600 hover:bg-emerald-700 text-white' 
+                          : 'bg-blue-600 hover:bg-blue-700 text-white'
+                      }`} 
+                      disabled={isLoading}
+                    >
+                      {isLoading ? (t('common.loading', 'Verifying...')) : (t('auth.loginButton', 'Sign In'))}
+                    </Button>
+                  </form>
+
+                  {/* One-Click Quick Sign In Helpers */}
+                  <div className="relative my-3">
+                    <div className="absolute inset-0 flex items-center">
+                      <div className="w-full border-t border-slate-200 dark:border-slate-800" />
+                    </div>
+                    <div className="relative flex justify-center text-[10px] uppercase">
+                      <span className="bg-white dark:bg-slate-900 px-2 text-slate-400 font-semibold">
+                        Instant 1-Click Access
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    {selectedRole === 'trainee' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          loginAsTrainee({ name: 'Pavan Kumar (Trainee)', email: 'trainee@pathfinder.org' });
+                          navigate('/main');
+                        }}
+                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-blue-500 hover:text-blue-600 font-semibold"
+                      >
+                        🎓 Instant Sign In as Trainee (trainee / 123456)
+                      </Button>
+                    )}
+                    {selectedRole === 'trainer' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          loginAsTrainer({ name: 'Dr. Priya Sharma (Trainer)', email: 'trainer@pathfinder.org' });
+                          navigate('/trainer');
+                        }}
+                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-emerald-500 hover:text-emerald-600 font-semibold"
+                      >
+                        👨‍🏫 Instant Sign In as Trainer (trainer / 123456)
+                      </Button>
+                    )}
+                    {selectedRole === 'admin' && (
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          loginAsAdmin();
+                          navigate('/admin');
+                        }}
+                        className="text-xs h-9 rounded-xl border-slate-200 dark:border-slate-700 hover:border-purple-500 hover:text-purple-600 font-semibold"
+                      >
+                        🛡️ Instant Sign In as Admin (pathfinder / 123456)
+                      </Button>
+                    )}
+                  </div>
                 </TabsContent>
 
                 {/* Sign Up Form */}

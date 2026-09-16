@@ -20,7 +20,7 @@ export const TrainerLoginModal: React.FC<TrainerLoginModalProps> = ({
   onOpenChange,
   onOpenApplyModal
 }) => {
-  const { setRole, loginAsGuest } = useAuth();
+  const { setRole, loginAsTrainer } = useAuth();
   const navigate = useNavigate();
 
   const [username, setUsername] = useState('');
@@ -58,7 +58,11 @@ export const TrainerLoginModal: React.FC<TrainerLoginModalProps> = ({
 
       // Successful login
       setRole('trainer');
-      loginAsGuest('trainer');
+      loginAsTrainer({
+        id: res.trainer?.id || 'trainer_user',
+        email: res.trainer?.email || `${username}@pathfinder.org`,
+        name: res.trainer?.name || username
+      });
       toast.success(`Welcome back, Trainer ${res.trainer?.name || username}!`);
       onOpenChange(false);
       navigate('/trainer', { replace: true });

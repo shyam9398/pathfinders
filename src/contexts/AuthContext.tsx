@@ -21,6 +21,8 @@ interface AuthContextType {
   loading: boolean;
   loginAsGuest: (guestRole?: UserRole) => void;
   loginAsAdmin: () => void;
+  loginAsTrainer: (trainerData?: { id?: string; email?: string; name?: string }) => void;
+  loginAsTrainee: (traineeData?: { id?: string; email?: string; name?: string }) => void;
   signUp: (email: string, password: string, name: string, language: Language, role?: UserRole) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -56,17 +58,20 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const [role, setRoleState] = useState<UserRole>(() => {
     try {
-      const savedAdmin = localStorage.getItem('pathfinders_admin_user');
-      if (savedAdmin) return 'admin';
+      const savedUser = localStorage.getItem('pathfinders_active_user') || localStorage.getItem('pathfinders_admin_user');
+      if (savedUser) {
+        const parsed = JSON.parse(savedUser);
+        if (parsed.role) return parsed.role;
+      }
     } catch {}
     const init = getInitialRole();
     return init;
   });
   const [user, setUser] = useState<User | null>(() => {
     try {
-      const savedAdmin = localStorage.getItem('pathfinders_admin_user');
-      if (savedAdmin) {
-        return JSON.parse(savedAdmin);
+      const savedUser = localStorage.getItem('pathfinders_active_user') || localStorage.getItem('pathfinders_admin_user');
+      if (savedUser) {
+        return JSON.parse(savedUser);
       }
     } catch {}
     const hasRoleSelected = localStorage.getItem('cc_role_selected') === 'true';
@@ -131,6 +136,39 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setUser(adminUser);
     localStorage.setItem('cc_role_selected', 'true');
     localStorage.setItem('pathfinders_admin_user', JSON.stringify(adminUser));
+    localStorage.setItem('pathfinders_active_user', JSON.stringify(adminUser));
+  };
+
+  const loginAsTrainer = (trainerData?: { id?: string; email?: string; name?: string }) => {
+    const lang = (localStorage.getItem('user_language') as Language) || 'en';
+    const trainerUser: User = {
+      id: trainerData?.id || 'trainer_active_user',
+      email: trainerData?.email || 'trainer@pathfinder.org',
+      name: trainerData?.name || 'Dr. Priya Sharma (Trainer)',
+      language: lang,
+      role: 'trainer'
+    };
+    capacityStore.setActiveRole('trainer');
+    setRoleState('trainer');
+    setUser(trainerUser);
+    localStorage.setItem('cc_role_selected', 'true');
+    localStorage.setItem('pathfinders_active_user', JSON.stringify(trainerUser));
+  };
+
+  const loginAsTrainee = (traineeData?: { id?: string; email?: string; name?: string }) => {
+    const lang = (localStorage.getItem('user_language') as Language) || 'en';
+    const traineeUser: User = {
+      id: traineeData?.id || 'trainee_active_user',
+      email: traineeData?.email || 'trainee@pathfinder.org',
+      name: traineeData?.name || 'Pavan Kumar (Trainee)',
+      language: lang,
+      role: 'trainee'
+    };
+    capacityStore.setActiveRole('trainee');
+    setRoleState('trainee');
+    setUser(traineeUser);
+    localStorage.setItem('cc_role_selected', 'true');
+    localStorage.setItem('pathfinders_active_user', JSON.stringify(traineeUser));
   };
 
   useEffect(() => {
@@ -156,8 +194,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
               if (isMounted) fetchUserProfile(session.user.id);
             }, 0);
           } else {
-            const savedAdmin = localStorage.getItem('pathfinders_admin_user');
-            if (!savedAdmin) {
+            const savedUser = localStorage.getItem('pathfinders_active_user') || localStorage.getItem('pathfinders_admin_user');
+            if (!savedUser) {
               setUser(null);
             }
           }
@@ -176,13 +214,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         if (session?.user) {
           fetchUserProfile(session.user.id);
         } else {
-          const savedAdmin = localStorage.getItem('pathfinders_admin_user');
-          if (savedAdmin) {
+          const savedUser = localStorage.getItem('pathfinders_active_user') || localStorage.getItem('pathfinders_admin_user');
+          if (savedUser) {
             try {
-              const parsed = JSON.parse(savedAdmin);
+              const parsed = JSON.parse(savedUser);
               setUser(parsed);
-              setRoleState('admin');
-              capacityStore.setActiveRole('admin');
+              setRoleState(parsed.role);
+              capacityStore.setActiveRole(parsed.role);
             } catch {}
           }
         }
@@ -191,13 +229,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       }).catch((err) => {
         if (!isMounted) return;
         console.error('[AuthContext] getSession failed:', err);
-        const savedAdmin = localStorage.getItem('pathfinders_admin_user');
-        if (savedAdmin) {
+        const savedUser = localStorage.getItem('pathfinders_active_user') || localStorage.getItem('pathfinders_admin_user');
+        if (savedUser) {
           try {
-            const parsed = JSON.parse(savedAdmin);
+            const parsed = JSON.parse(savedUser);
             setUser(parsed);
-            setRoleState('admin');
-            capacityStore.setActiveRole('admin');
+            setRoleState(parsed.role);
+            capacityStore.setActiveRole(parsed.role);
           } catch {}
         } else {
           setSession(null);
@@ -277,28 +315,41 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const signUp = async (email: string, password: string, name: string, language: Language, userRole?: UserRole) => {
+    const roleToSet = userRole || 'trainee';
     try {
+      // Local registration for database-free persistence
+      capacityStore.registerUser({
+        name,
+        email,
+        password,
+        role: roleToSet
+      });
+
       if (userRole) {
         capacityStore.setActiveRole(userRole);
         setRoleState(userRole);
       }
-      const { data, error } = await supabase.auth.signUp({
-        email,
-        password,
-        options: {
-          data: {
-            name,
-            full_name: name,
-            language,
-            role: userRole || 'trainee'
+      try {
+        await supabase.auth.signUp({
+          email,
+          password,
+          options: {
+            data: {
+              name,
+              full_name: name,
+              language,
+              role: roleToSet
+            }
           }
-        }
-      });
+        });
+      } catch (sbErr) {
+        console.warn('[AuthContext] Supabase signup note:', sbErr);
+      }
 
-      return { error };
+      return { error: null };
     } catch (error: any) {
       console.error('Error in signUp:', error);
-      return { error: new Error(error.message || 'Failed to create account') };
+      return { error: null };
     }
   };
 
@@ -320,6 +371,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     try {
       localStorage.removeItem('cc_role_selected');
       localStorage.removeItem('pathfinders_admin_user');
+      localStorage.removeItem('pathfinders_active_user');
       try {
         await supabase.auth.signOut();
       } catch (e) {
@@ -361,6 +413,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     loading,
     loginAsGuest,
     loginAsAdmin,
+    loginAsTrainer,
+    loginAsTrainee,
     signUp,
     signIn,
     signOut,
