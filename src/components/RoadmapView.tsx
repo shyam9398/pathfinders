@@ -200,7 +200,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ career, progress, onBa
   ];
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col lg:pl-60">
       <Navbar 
         onBack={onBack}
         breadcrumbs={[
@@ -210,7 +210,7 @@ export const RoadmapView: React.FC<RoadmapViewProps> = ({ career, progress, onBa
         ]}
       />
 
-      <main className="flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
         {/* Header Overview Card */}
         <Card className="border-border/80 shadow-sm overflow-hidden">
           <div className="p-6 sm:p-8 space-y-6">

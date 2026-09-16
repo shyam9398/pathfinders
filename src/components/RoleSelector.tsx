@@ -19,6 +19,8 @@ import {
 import { UserRole } from '@/types/capacityConnect';
 import { useAuth } from '@/contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
+import { TrainerApplicationModal } from './TrainerApplicationModal';
+import { TrainerLoginModal } from './TrainerLoginModal';
 
 interface RoleSelectorProps {
   onComplete: (role: UserRole) => void;
@@ -85,12 +87,17 @@ export const RoleSelector: React.FC<RoleSelectorProps> = ({ onComplete }) => {
     }
   ];
 
+  const [applyModalOpen, setApplyModalOpen] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
+
   const handleContinue = () => {
+    if (selectedRole === 'trainer') {
+      setLoginModalOpen(true);
+      return;
+    }
     loginAsGuest(selectedRole);
     onComplete(selectedRole);
-    if (selectedRole === 'trainer') {
-      navigate('/trainer');
-    } else if (selectedRole === 'admin') {
+    if (selectedRole === 'admin') {
       navigate('/admin');
     } else {
       navigate('/main');
@@ -105,13 +112,13 @@ export const RoleSelector: React.FC<RoleSelectorProps> = ({ onComplete }) => {
         <div className="text-center space-y-2.5">
           <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-blue-50 dark:bg-blue-950/60 border border-blue-200/80 dark:border-blue-900 text-blue-700 dark:text-blue-300 text-xs font-semibold">
             <Sparkles className="w-3.5 h-3.5 text-blue-600" />
-            <span>PS 26075 — CAPACITY CONNECT</span>
+            <span>PS 26075 — PATHFINDERS</span>
           </div>
           <h1 className="text-3xl sm:text-4xl font-black text-slate-900 dark:text-white tracking-tight">
             Choose Your Platform Role
           </h1>
           <p className="text-sm text-slate-600 dark:text-slate-400 max-w-xl mx-auto">
-            Select how you would like to participate in Capacity Connect. You can switch your role at any time from the left sidebar.
+            Select how you would like to participate in Pathfinders. You can switch your role at any time from the left sidebar.
           </p>
         </div>
 
@@ -186,16 +193,50 @@ export const RoleSelector: React.FC<RoleSelectorProps> = ({ onComplete }) => {
         </div>
 
         {/* Action Button */}
-        <div className="flex justify-center pt-2">
-          <Button
-            size="lg"
-            onClick={handleContinue}
-            className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-10 py-3 rounded-xl shadow-md hover:shadow-lg transition-all"
-          >
-            <span>Continue as {selectedRole.toUpperCase()}</span>
-            <ArrowRight className="w-4 h-4 ml-2" />
-          </Button>
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
+          {selectedRole === 'trainer' ? (
+            <>
+              <Button
+                size="lg"
+                onClick={() => setApplyModalOpen(true)}
+                className="w-full sm:w-auto bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold px-8 py-3 rounded-xl shadow-md transition-all flex items-center gap-2"
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Apply as Trainer</span>
+              </Button>
+              <Button
+                size="lg"
+                variant="outline"
+                onClick={() => setLoginModalOpen(true)}
+                className="w-full sm:w-auto border-slate-200 dark:border-slate-800 text-slate-800 dark:text-slate-200 font-bold px-8 py-3 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800"
+              >
+                <span>Trainer Portal Sign In</span>
+                <ArrowRight className="w-4 h-4 ml-2" />
+              </Button>
+            </>
+          ) : (
+            <Button
+              size="lg"
+              onClick={handleContinue}
+              className="bg-blue-600 hover:bg-blue-700 text-white font-bold px-10 py-3 rounded-xl shadow-md hover:shadow-lg transition-all flex items-center gap-2"
+            >
+              <span>Continue as {selectedRole.toUpperCase()}</span>
+              <ArrowRight className="w-4 h-4" />
+            </Button>
+          )}
         </div>
+
+        {/* Modals */}
+        <TrainerApplicationModal
+          open={applyModalOpen}
+          onOpenChange={setApplyModalOpen}
+          onSuccess={() => setLoginModalOpen(true)}
+        />
+        <TrainerLoginModal
+          open={loginModalOpen}
+          onOpenChange={setLoginModalOpen}
+          onOpenApplyModal={() => setApplyModalOpen(true)}
+        />
 
       </div>
     </div>

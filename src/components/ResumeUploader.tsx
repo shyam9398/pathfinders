@@ -58,27 +58,34 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
     }
 
     setIsUploading(true);
-    setProgress(0);
+    setProgress(15);
     setError('');
+    const startTime = Date.now();
+
+    // Dynamic number progress simulation
+    const interval = setInterval(() => {
+      setProgress(prev => {
+        if (prev >= 98) return prev;
+        const inc = prev < 40 
+          ? Math.floor(Math.random() * 5) + 3 
+          : prev < 75 
+            ? Math.floor(Math.random() * 3) + 2 
+            : Math.floor(Math.random() * 2) + 1;
+        return Math.min(98, prev + inc);
+      });
+    }, 90);
 
     try {
-      // Progress: File reading (25%)
-      setProgress(25);
-      
       console.log('[ResumeUploader] Starting file extraction for:', file.name);
       
       let resumeText: string;
       try {
         resumeText = await extractTextFromFile(file);
         console.log('[ResumeUploader] DEBUG - Parsed resume length:', resumeText.length, 'characters');
-        console.log('[ResumeUploader] DEBUG - First 200 chars:', resumeText.substring(0, 200));
       } catch (extractError) {
         console.error('[ResumeUploader] Extraction failed:', extractError);
         throw new Error(`Failed to extract text from file: ${extractError instanceof Error ? extractError.message : 'Unknown error'}`);
       }
-      
-      // Progress: Text extracted (50%)
-      setProgress(50);
       
       // Validate extracted text length
       if (resumeText.trim().length < 50) {
@@ -130,8 +137,15 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
         rawResponse = localResult.rawResponse;
       }
 
-      // Progress: Analysis complete (100%)
+      // Smooth progress pacing: ensure minimum elapsed time so user sees dynamic progress count up
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 1400) {
+        await new Promise(r => setTimeout(r, 1400 - elapsed));
+      }
+
+      clearInterval(interval);
       setProgress(100);
+      await new Promise(r => setTimeout(r, 800));
 
       const analysisResult = {
         structuredData: analysisData || {},
@@ -152,6 +166,7 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
       });
 
     } catch (err) {
+      clearInterval(interval);
       console.error('Upload error:', err);
       setError(err instanceof Error ? err.message : t('upload.error'));
       toast({
@@ -160,8 +175,8 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
         variant: 'destructive'
       });
     } finally {
+      clearInterval(interval);
       setIsUploading(false);
-      setTimeout(() => setProgress(0), 1000);
     }
   }, [consent, user, language, t, onAnalysisComplete]);
 
@@ -283,12 +298,29 @@ export const ResumeUploader: React.FC<ResumeUploaderProps> = ({
 
           {/* Progress */}
           {isUploading && (
-            <div className="space-y-2 p-4 rounded-xl bg-blue-50/50 dark:bg-blue-950/30 border border-blue-100 dark:border-blue-900">
-              <div className="flex justify-between text-xs font-semibold text-blue-700 dark:text-blue-300">
-                <span>{progress < 50 ? 'Reading file content...' : progress < 100 ? 'Running AI ATS Analysis...' : 'Finalizing report...'}</span>
-                <span>{progress}%</span>
+            <div className="space-y-3 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-blue-200/90 dark:border-blue-900/60 shadow-md animate-in fade-in duration-200">
+              <div className="flex items-center justify-between text-xs font-semibold">
+                <span className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                  <span className="w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+                  {progress < 40 ? 'Extracting text and structure...' : progress < 75 ? 'Running AI ATS & Competency Analysis...' : progress < 100 ? 'Synthesizing technical skill gaps...' : 'Analysis Complete!'}
+                </span>
+                <span className="text-sm font-bold text-blue-600 dark:text-blue-400 tabular-nums">
+                  {progress}%
+                </span>
               </div>
-              <Progress value={progress} className="h-2 bg-blue-100 dark:bg-blue-900" />
+              <Progress value={progress} className="h-2.5 bg-slate-100 dark:bg-slate-800 transition-all duration-300 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-indigo-500" />
+              
+              <div className="grid grid-cols-3 gap-2 pt-1 text-[10px] text-center font-medium">
+                <div className={`p-1.5 rounded-lg transition-colors ${progress >= 30 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/60' : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40'}`}>
+                  File Extracted
+                </div>
+                <div className={`p-1.5 rounded-lg transition-colors ${progress >= 70 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/60' : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40'}`}>
+                  ATS Scored
+                </div>
+                <div className={`p-1.5 rounded-lg transition-colors ${progress >= 100 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/60' : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40'}`}>
+                  Report Ready
+                </div>
+              </div>
             </div>
           )}
 

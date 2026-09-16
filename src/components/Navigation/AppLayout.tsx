@@ -117,7 +117,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           <div className="flex flex-col">
             <div className="flex items-center gap-1.5">
               <span className="font-extrabold text-base text-slate-900 dark:text-white tracking-tight leading-none">
-                Capacity Connect
+                PathFinders
               </span>
             </div>
             <span className="text-[10px] font-semibold text-blue-600 dark:text-blue-400 mt-0.5">
@@ -242,7 +242,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
           >
             <Menu className="w-5 h-5" />
           </Button>
-          <span className="font-extrabold text-sm text-slate-900 dark:text-white">Capacity Connect</span>
+          <span className="font-extrabold text-sm text-slate-900 dark:text-white">PathFinders</span>
         </div>
 
         <div className="flex items-center gap-2">
@@ -277,14 +277,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
       <div className="flex-1 md:pl-64 flex flex-col min-w-0">
         
         {/* Subtle Breadcrumb & Action Top Header */}
-        <header className="h-14 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xs px-4 sm:px-6 lg:px-8 flex items-center justify-between">
+        <header className="h-16 border-b border-slate-200/80 dark:border-slate-800/80 bg-white/60 dark:bg-slate-900/60 backdrop-blur-xs px-4 sm:px-6 lg:px-8 flex items-center justify-between">
           <div className="flex items-center gap-2 text-xs">
             {showBack && !isHome && (
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleBack}
-                className="h-7 px-2 text-slate-500 hover:text-slate-900 mr-2"
+                className="h-8 px-2.5 text-slate-500 hover:text-slate-900 mr-2 rounded-lg border border-slate-200 dark:border-slate-700"
               >
                 <ArrowLeft className="w-3.5 h-3.5 mr-1" />
                 Back
@@ -311,7 +311,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({
               </div>
             ) : (
               <span className="font-semibold text-slate-700 dark:text-slate-300">
-                PS 26075 — Capacity Connect
+                PS 26075 — PathFinders
               </span>
             )}
           </div>

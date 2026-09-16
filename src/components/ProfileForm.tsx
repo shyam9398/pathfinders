@@ -6,7 +6,6 @@ import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { ArrowLeft, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import Navbar from '@/components/Navigation/Navbar';
 
 interface ProfileData {
   name: string;
@@ -177,15 +176,7 @@ export const ProfileForm = ({ onComplete, onBack, initialData }: ProfileFormProp
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 flex flex-col lg:pl-60">
-      <Navbar 
-        breadcrumbs={[
-          { label: 'Career Guide', href: '/career-guide' },
-          { label: 'Assessment' }
-        ]}
-      />
-
-      <main className="flex-1 max-w-3xl w-full mx-auto px-4 sm:px-6 py-8 space-y-6">
+    <div className="w-full max-w-5xl mx-auto space-y-6">
         
         {/* Step Indicator Card */}
         <Card className="glass-card shadow-xs border-slate-200 dark:border-slate-800">
@@ -310,8 +301,6 @@ export const ProfileForm = ({ onComplete, onBack, initialData }: ProfileFormProp
             <span>{t('simpleForm.getRecommendations', 'Generate Career Matches')}</span>
           </Button>
         </div>
-
-      </main>
     </div>
   );
 };

@@ -45,7 +45,8 @@ import {
   ExternalLink,
   Star,
   Calendar,
-  MessageSquare
+  MessageSquare,
+  History
 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -54,6 +55,7 @@ import { TrainerProfile } from '@/types/capacityConnect';
 import { toast } from 'sonner';
 import { ConfettiEffect } from './ConfettiEffect';
 import Navbar from '@/components/Navigation/Navbar';
+import { careerGuidanceService } from '@/services/careerGuidanceService';
 
 export interface ProfileData {
   name: string;
@@ -79,6 +81,7 @@ export interface CareerAnalyzerProps {
   profileData: ProfileData;
   onBack: () => void;
   onEditProfile?: () => void;
+  onViewHistory?: () => void;
 }
 
 export interface CareerOption {
@@ -162,15 +165,40 @@ const doesUserHaveSkill = (userSkillsList: string[], requiredSkill: string): boo
   return false;
 };
 
-export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onBack, onEditProfile }) => {
+export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onBack, onEditProfile, onViewHistory }) => {
   const { user } = useAuth();
   const { t, language } = useLanguage();
   const navigate = useNavigate();
 
   // Core state
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
   const [careerOptions, setCareerOptions] = useState<CareerOption[]>([]);
   const [showConfetti, setShowConfetti] = useState(false);
+
+  // Dynamic number loading simulation for analysis
+  useEffect(() => {
+    if (!isAnalyzing) {
+      setAnalysisProgress(0);
+      return;
+    }
+
+    setAnalysisProgress(12);
+
+    const interval = setInterval(() => {
+      setAnalysisProgress(prev => {
+        if (prev >= 98) return prev;
+        const inc = prev < 35 
+          ? Math.floor(Math.random() * 4) + 3 
+          : prev < 75 
+            ? Math.floor(Math.random() * 3) + 2 
+            : Math.floor(Math.random() * 2) + 1;
+        return Math.min(98, prev + inc);
+      });
+    }, 90);
+
+    return () => clearInterval(interval);
+  }, [isAnalyzing]);
 
   // Discovery Controls state
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
@@ -311,7 +339,55 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
   // Dynamic Internship and Job Recommendations tailored to Student Year or Employee Status
   const recommendedOpportunities = useMemo(() => {
     if (careerStage === 'student') {
-      if (academicYear === '1st Year' || academicYear === '2nd Year') {
+      if (academicYear === '1st Year') {
+        return [
+          {
+            id: 'opp-1st-1',
+            title: 'Full-Stack Portfolio Project & GitHub Showcase Track',
+            company: 'Pathfinders Capstone Academy',
+            logo: '🚀',
+            type: 'Foundational Project Track',
+            mode: 'Self-Paced / Guided',
+            stipend: 'Verified Project Credential',
+            duration: '4-6 Weeks',
+            targetAudience: '1st Year Students (Foundation Phase)',
+            skills: ['HTML/CSS', 'JavaScript', 'Git & GitHub', 'Web Design'],
+            matchScore: 98,
+            description: 'Design and deploy a professional personal portfolio with 3 interactive web apps to showcase in 2nd year internship applications.',
+            highlight: 'Essential 1st Year Portfolio Milestone'
+          },
+          {
+            id: 'opp-1st-2',
+            title: 'DSA & Algorithmic Problem Solving Starter Track',
+            company: 'Pathfinders Coding Lab',
+            logo: '💻',
+            type: 'Core Competency Track',
+            mode: 'Self-Paced / Mentor Assisted',
+            stipend: 'Coding Certification',
+            duration: '8 Weeks',
+            targetAudience: '1st Year Students',
+            skills: ['Python / Java', 'Arrays & Strings', 'Basic Algorithms', 'Problem Solving'],
+            matchScore: 95,
+            description: 'Master core data structures and 50+ curated beginner coding challenges to prepare for 2nd year campus internships.',
+            highlight: 'Placement Foundation Booster'
+          },
+          {
+            id: 'opp-1st-3',
+            title: 'AICTE Smart Campus Hackathon & Open Fellowship',
+            company: 'Student Innovation Cell',
+            logo: '🏆',
+            type: 'Hackathon & Innovation Track',
+            mode: 'Hybrid / Team Collaboration',
+            stipend: 'Recognition Badges & Awards',
+            duration: '4 Weeks',
+            targetAudience: '1st Year Students',
+            skills: ['Problem Solving', 'Teamwork', 'Prototyping', 'Git'],
+            matchScore: 92,
+            description: 'Collaborate in peer teams solving campus-level automation and sustainability problems to gain early project experience.',
+            highlight: 'National Student Innovation'
+          }
+        ];
+      } else if (academicYear === '2nd Year') {
         return [
           {
             id: 'opp-1',
@@ -322,7 +398,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
             mode: 'Hybrid / Remote',
             stipend: '₹45,000 / month',
             duration: '2 Months (Summer 2026)',
-            targetAudience: '1st & 2nd Year Undergraduates',
+            targetAudience: '2nd Year Undergraduates',
             skills: ['Data Structures', 'Python', 'Problem Solving', 'Git'],
             matchScore: 94,
             description: 'Mentorship-driven engineering fellowship solving real developer productivity problems.',
@@ -337,7 +413,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
             mode: 'Bangalore / Hybrid',
             stipend: '₹35,000 / month',
             duration: '3 Months',
-            targetAudience: '1st - 3rd Year Students',
+            targetAudience: '2nd & 3rd Year Students',
             skills: ['React', 'JavaScript', 'HTML/CSS', 'Tailwind'],
             matchScore: 91,
             description: 'Build modern dashboard components and optimize web vitals for payment flows.',
@@ -352,7 +428,7 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
             mode: 'Virtual / Online',
             stipend: 'Sponsored Certificate + Swag Kits',
             duration: '8 Weeks',
-            targetAudience: '1st & 2nd Year Students',
+            targetAudience: '2nd Year Students',
             skills: ['Cloud Computing', 'Linux', 'Python'],
             matchScore: 88,
             description: 'Government-recognized foundational cloud engineering and containerization track.',
@@ -512,68 +588,123 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
   // Handle start analysis & generate recommendations
   const handleStartAnalysis = async () => {
     setIsAnalyzing(true);
+    setAnalysisProgress(12);
+    const startTime = Date.now();
+    let generatedCareers: CareerOption[] = [];
+
     try {
+      // 1. Generate skill-based career recommendations with timeout protection
+      generatedCareers = await generateSkillBasedCareers(profileData);
+
+      // 2. Best-effort Supabase persistence (non-blocking if slow or offline)
       if (user) {
-        await supabase
-          .from('career_profiles')
-          .upsert({
+        try {
+          const profilePromise = supabase
+            .from('career_profiles')
+            .upsert({
+              user_id: user.id,
+              name: profileData.name || 'Student',
+              age: profileData.age || '20',
+              country: profileData.country || 'India',
+              education_level: profileData.educationLevel,
+              field_of_study: profileData.fieldOfStudy,
+              specialization: profileData.specialization,
+              current_year: profileData.currentYear,
+              certifications: profileData.certifications,
+              skills: profileData.skills,
+              interests: profileData.interests,
+              work_environment: profileData.workEnvironment,
+              short_term_goals: profileData.goals,
+              long_term_goals: profileData.goals,
+              career_transition: profileData.careerTransition,
+              study_or_job: profileData.studyOrJob,
+              location_preference: profileData.locationPreference,
+              company_type: profileData.companyType,
+              financial_support: profileData.financialSupport,
+            });
+
+          const optionsToInsert = generatedCareers.map(opt => ({
             user_id: user.id,
-            name: profileData.name || 'Student',
-            age: profileData.age || '20',
-            country: profileData.country || 'India',
-            education_level: profileData.educationLevel,
-            field_of_study: profileData.fieldOfStudy,
-            specialization: profileData.specialization,
-            current_year: profileData.currentYear,
-            certifications: profileData.certifications,
-            skills: profileData.skills,
-            interests: profileData.interests,
-            work_environment: profileData.workEnvironment,
-            short_term_goals: profileData.goals,
-            long_term_goals: profileData.goals,
-            career_transition: profileData.careerTransition,
-            study_or_job: profileData.studyOrJob,
-            location_preference: profileData.locationPreference,
-            company_type: profileData.companyType,
-            financial_support: profileData.financialSupport,
+            career_name: opt.career_name,
+            description: opt.description,
+            match_percentage: opt.match_percentage,
+            required_skills: opt.required_skills,
+            rationale: opt.rationale
+          }));
+
+          // Race with 2.5s timeout so slow DB queries never hang the UI
+          await Promise.race([
+            Promise.all([
+              profilePromise,
+              supabase.from('career_options').delete().eq('user_id', user.id).then(() => {
+                return supabase.from('career_options').insert(optionsToInsert);
+              })
+            ]),
+            new Promise(res => setTimeout(res, 2500))
+          ]);
+        } catch (dbErr) {
+          console.warn('Supabase profile/options sync error:', dbErr);
+        }
+      }
+
+      // 3. Guarantee persistence in localStorage and careerGuidanceService
+      const currentUserId = user?.id || 'guest';
+      try {
+        localStorage.setItem(`pf_career_options_${currentUserId}`, JSON.stringify(generatedCareers));
+        localStorage.setItem('pf_user_skills', profileData.skills || '');
+        localStorage.setItem('pf_user_degree', profileData.fieldOfStudy || profileData.educationLevel || '');
+        localStorage.setItem('pf_user_goals', profileData.goals || '');
+
+        const topCareer = generatedCareers[0];
+        if (topCareer) {
+          localStorage.setItem(`pf_target_career_${currentUserId}`, topCareer.career_name);
+          // Set an optimal health score (88/100) on assessment completion
+          localStorage.setItem(`pf_career_health_score_${currentUserId}`, '88');
+          
+          careerGuidanceService.saveAnalysis(currentUserId, {
+            targetCareer: topCareer.career_name,
+            matchPercentage: topCareer.match_percentage,
+            skills: (profileData.skills || 'Java, Python').split(/[,;|\n]+/).map(s => s.trim()).filter(Boolean),
+            interests: (profileData.interests || 'Software Engineering').split(/[,;|\n]+/).map(s => s.trim()).filter(Boolean),
+            goals: profileData.goals || 'Land a software engineering position.',
+            requiredSkills: topCareer.required_skills,
+            skillGaps: topCareer.required_skills.filter(s => !doesUserHaveSkill(parsedUserSkills, s)),
+            recommendedTrainers: []
           });
+        }
+      } catch (storageErr) {
+        console.warn('LocalStorage career options save error:', storageErr);
       }
 
-      const careers = await generateSkillBasedCareers(profileData);
-
-      if (user) {
-        const optionsToInsert = careers.map(opt => ({
-          user_id: user.id,
-          career_name: opt.career_name,
-          description: opt.description,
-          match_percentage: opt.match_percentage,
-          required_skills: opt.required_skills,
-          rationale: opt.rationale
-        }));
-
-        await supabase.from('career_options').delete().eq('user_id', user.id);
-        await supabase.from('career_options').insert(optionsToInsert);
-
-        const avgMatchScore = careers.reduce((sum, c) => sum + c.match_percentage, 0) / (careers.length || 1);
-        await supabase.from('career_profiles')
-          .update({ career_health_score: Math.round(avgMatchScore * 0.3) })
-          .eq('user_id', user.id);
+      // Smooth progress pacing: minimum elapsed time
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 1400) {
+        await new Promise(r => setTimeout(r, 1400 - elapsed));
       }
 
-      setCareerOptions(careers);
+      setAnalysisProgress(100);
+      await new Promise(r => setTimeout(r, 600));
+
+      setCareerOptions(generatedCareers);
       setShowConfetti(true);
       setTimeout(() => setShowConfetti(false), 2800);
     } catch (error) {
       console.error('Error in career analysis:', error);
-      toast.error('Could not load AI recommendations, loaded skill catalog.');
+      const fallbackCareers = getCuratedSkillCareers(profileData);
+      setCareerOptions(fallbackCareers);
+      try {
+        localStorage.setItem(`pf_career_options_${user?.id || 'guest'}`, JSON.stringify(fallbackCareers));
+      } catch (e) {}
+      setAnalysisProgress(100);
     } finally {
+      setAnalysisProgress(100);
       setIsAnalyzing(false);
     }
   };
 
   const generateSkillBasedCareers = async (profile: ProfileData): Promise<CareerOption[]> => {
     try {
-      const { data, error } = await supabase.functions.invoke('generate-career-recommendations', {
+      const invokePromise = supabase.functions.invoke('generate-career-recommendations', {
         body: {
           education: profile.fieldOfStudy || profile.educationLevel || '',
           interests: profile.interests || '',
@@ -582,6 +713,13 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
           language: language || 'en'
         }
       });
+
+      // Strict 2.5 second timeout on cloud edge function so it NEVER hangs at 98%
+      const timeoutPromise = new Promise<{ data: any; error: any }>((resolve) => 
+        setTimeout(() => resolve({ data: null, error: new Error('Edge function timeout') }), 2500)
+      );
+
+      const { data, error } = await Promise.race([invokePromise, timeoutPromise]);
       if (error) throw error;
       if (data?.careers && Array.isArray(data.careers) && data.careers.length > 0) {
         return data.careers.map((career: any, index: number) => augmentCareer(career, index, profile));
@@ -1191,23 +1329,105 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
     return list;
   }, [careerOptions, selectedCategory, searchQuery, sortBy, savedCareerNames]);
 
-  // Loading spinner during initial computation
+  // Loading spinner during initial computation with dynamic number loading
   if (isAnalyzing && careerOptions.length === 0) {
+    const getStageInfo = (pct: number) => {
+      if (pct < 30) {
+        return {
+          title: 'Analyzing Your Career Profile',
+          desc: 'Parsing your credentials, skills, and academic background...',
+          step: 1
+        };
+      }
+      if (pct < 65) {
+        return {
+          title: 'Benchmarking Industry Demand',
+          desc: 'Matching your skills with real-time hiring benchmarks...',
+          step: 2
+        };
+      }
+      if (pct < 95) {
+        return {
+          title: 'Synthesizing Career Paths',
+          desc: 'Evaluating salary potential, demand trends, and skill gaps...',
+          step: 3
+        };
+      }
+      return {
+        title: 'Finalizing Recommendations',
+        desc: 'Generating personalized roadmaps and readiness metrics...',
+        step: 3
+      };
+    };
+
+    const stage = getStageInfo(analysisProgress);
+
     return (
       <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 flex flex-col lg:pl-60">
         <Navbar breadcrumbs={[{ label: 'Career Guide', href: '/career-guide' }, { label: 'Analyzing Profile' }]} />
         <div className="flex-1 flex items-center justify-center p-4">
-          <Card className="glass-card p-8 max-w-md w-full text-center shadow-md border-slate-200 dark:border-slate-800">
-            <div className="space-y-5">
-              <div className="w-14 h-14 mx-auto bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 rounded-2xl flex items-center justify-center animate-pulse">
-                <Brain className="w-7 h-7 text-blue-600 dark:text-blue-400" />
+          <Card className="glass-card p-8 max-w-md w-full text-center shadow-lg border-slate-200/80 dark:border-slate-800 rounded-2xl bg-white/95 dark:bg-slate-900/95 backdrop-blur-md">
+            <div className="space-y-6">
+              {/* Animated Icon */}
+              <div className="relative w-16 h-16 mx-auto">
+                <div className="w-16 h-16 bg-blue-50 dark:bg-blue-950/60 border border-blue-100 dark:border-blue-900 rounded-2xl flex items-center justify-center animate-pulse shadow-xs">
+                  <Brain className="w-8 h-8 text-blue-600 dark:text-blue-400" />
+                </div>
+                <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white p-1 rounded-full shadow-xs">
+                  <Sparkles className="w-3.5 h-3.5 animate-spin" style={{ animationDuration: '4s' }} />
+                </div>
               </div>
-              <div>
-                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1.5">Analyzing Your Career Profile</h2>
-                <p className="text-xs text-slate-500">Matching your skills with real-time hiring benchmarks...</p>
+
+              {/* Title & Description */}
+              <div className="min-h-[64px] flex flex-col justify-center">
+                <h2 className="text-xl font-bold text-slate-900 dark:text-white mb-1.5 transition-all duration-300">
+                  {stage.title}
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 transition-all duration-300 max-w-xs mx-auto">
+                  {stage.desc}
+                </p>
               </div>
-              <div className="space-y-2 pt-2">
-                <Progress value={85} className="h-2 bg-slate-100 dark:bg-slate-800" />
+
+              {/* Dynamic Progress Bar & Number Counter */}
+              <div className="space-y-2 pt-1">
+                <div className="flex items-center justify-between text-xs font-semibold">
+                  <span className="text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                    <span className="inline-block w-2 h-2 rounded-full bg-blue-600 animate-ping" />
+                    AI Career Engine
+                  </span>
+                  <span className="text-sm font-bold text-blue-600 dark:text-blue-400 tabular-nums">
+                    {analysisProgress}%
+                  </span>
+                </div>
+                <Progress value={analysisProgress} className="h-2.5 bg-slate-100 dark:bg-slate-800 transition-all duration-300 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-indigo-500" />
+              </div>
+
+              {/* Progress Milestones */}
+              <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-100 dark:border-slate-800/80">
+                <div className={`p-2 rounded-xl text-center text-[10px] font-medium transition-all ${
+                  analysisProgress >= 25 
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-100 dark:border-blue-900' 
+                    : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40 dark:text-slate-500 border border-transparent'
+                }`}>
+                  <div className="font-semibold mb-0.5">Step 1</div>
+                  <span>Profile Skills</span>
+                </div>
+                <div className={`p-2 rounded-xl text-center text-[10px] font-medium transition-all ${
+                  analysisProgress >= 65 
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-100 dark:border-blue-900' 
+                    : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40 dark:text-slate-500 border border-transparent'
+                }`}>
+                  <div className="font-semibold mb-0.5">Step 2</div>
+                  <span>Market Match</span>
+                </div>
+                <div className={`p-2 rounded-xl text-center text-[10px] font-medium transition-all ${
+                  analysisProgress >= 95 
+                    ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-100 dark:border-blue-900' 
+                    : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40 dark:text-slate-500 border border-transparent'
+                }`}>
+                  <div className="font-semibold mb-0.5">Step 3</div>
+                  <span>Roadmap</span>
+                </div>
               </div>
             </div>
           </Card>
@@ -1884,16 +2104,29 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                 <span className="text-slate-500">
                   {profileCompleteness >= 80 ? 'Optimal match accuracy' : 'Add skills to improve recommendations'}
                 </span>
-                {onEditProfile && (
-                  <Button 
-                    variant="ghost" 
-                    size="sm" 
-                    onClick={onEditProfile}
-                    className="h-8 px-3 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
-                  >
-                    Edit Profile
-                  </Button>
-                )}
+                <div className="flex items-center gap-1">
+                  {onViewHistory && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={onViewHistory}
+                      className="h-8 px-2.5 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-blue-600 rounded-xl"
+                    >
+                      <History className="w-3.5 h-3.5 mr-1 text-blue-600" />
+                      History
+                    </Button>
+                  )}
+                  {onEditProfile && (
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={onEditProfile}
+                      className="h-8 px-3 text-xs font-semibold text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-xl"
+                    >
+                      Edit Profile
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -2054,7 +2287,11 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                   🎓 Status: <strong>{academicYear} Student</strong> &bull; Department: <strong>{profileData.fieldOfStudy || 'Computer Science & Engineering'}</strong>
                 </span>
                 <span className="text-[11px] font-semibold text-blue-600">
-                  {academicYear === '4th / Final Year' || academicYear === 'Post-Graduate' ? 'Recommending Graduate Engineering Roles' : 'Recommending Curated Internships'}
+                  {academicYear === '1st Year'
+                    ? 'Recommending Foundation & Core Skill Projects (Internships from 2nd Year)'
+                    : academicYear === '4th / Final Year' || academicYear === 'Post-Graduate'
+                      ? 'Recommending Graduate Engineering Roles'
+                      : 'Recommending Curated Internships'}
                 </span>
               </div>
             </div>
@@ -2665,16 +2902,20 @@ export const CareerAnalyzer: React.FC<CareerAnalyzerProps> = ({ profileData, onB
                 <Briefcase className="w-5 h-5 text-blue-600" />
                 <h2 className="text-lg sm:text-xl font-extrabold text-slate-900 dark:text-white">
                   {careerStage === 'student'
-                    ? `Recommended Internships & Campus Drives for ${academicYear} Students`
+                    ? academicYear === '1st Year'
+                      ? 'Foundational Capstone Projects & Skill Building for 1st Year Students'
+                      : `Recommended Internships & Campus Drives for ${academicYear} Students`
                     : `Recommended Lateral Career Transitions (${experienceLevel})`}
                 </h2>
-                <Badge className="bg-emerald-50 text-emerald-700 border-emerald-200 text-xs font-bold">
-                  Verified Matches
+                <Badge className={`${academicYear === '1st Year' && careerStage === 'student' ? 'bg-blue-50 text-blue-700 border-blue-200' : 'bg-emerald-50 text-emerald-700 border-emerald-200'} text-xs font-bold`}>
+                  {academicYear === '1st Year' && careerStage === 'student' ? 'Foundational Phase' : 'Verified Matches'}
                 </Badge>
               </div>
               <p className="text-xs text-slate-500 mt-1">
                 {careerStage === 'student'
-                  ? `Curated based on your verified skills and academic progression (${academicYear}). Apply directly to boost your real-world credentials.`
+                  ? academicYear === '1st Year'
+                    ? 'Corporate internships officially commence from 2nd year onwards. Complete these foundational capstone tracks and algorithmic milestones now to qualify for tier-1 internships next year.'
+                    : `Curated based on your verified skills and academic progression (${academicYear}). Apply directly to boost your real-world credentials.`
                   : `Curated opportunities matching your technical skills and ${experienceLevel} industry experience.`}
               </p>
             </div>

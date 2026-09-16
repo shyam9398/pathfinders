@@ -29,12 +29,20 @@ import CertificatesPage from "./pages/CertificatesPage";
 import AssessmentsPage from "./pages/AssessmentsPage";
 import TrainerDashboard from "./pages/TrainerDashboard";
 import AdminDashboard from "./pages/AdminDashboard";
+import CareerUpdatesPage from "./pages/CareerUpdatesPage";
+import TrainersDirectoryPage from "./pages/TrainersDirectoryPage";
+import AchievementsPage from "./pages/AchievementsPage";
+import ProfilePage from "./pages/ProfilePage";
+import SettingsPage from "./pages/SettingsPage";
+
+import { GlobalDOMTranslator } from "./components/GlobalDOMTranslator";
 
 const queryClient = new QueryClient();
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
     <LanguageProvider>
+      <GlobalDOMTranslator />
       <AuthProvider>
         <TooltipProvider>
           <Toaster />
@@ -150,6 +158,11 @@ const App = () => (
                     <AdminDashboard />
                   </ProtectedRoute>
                 } />
+                <Route path="/admin/analytics" element={
+                  <ProtectedRoute>
+                    <AdminDashboard />
+                  </ProtectedRoute>
+                } />
                 <Route path="/admin/students" element={
                   <ProtectedRoute>
                     <AdminDashboard />
@@ -213,6 +226,31 @@ const App = () => (
                 <Route path="/dashboard" element={
                   <ProtectedRoute>
                     <Dashboard />
+                  </ProtectedRoute>
+                } />
+                <Route path="/career-updates" element={
+                  <ProtectedRoute>
+                    <CareerUpdatesPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/trainers" element={
+                  <ProtectedRoute>
+                    <TrainersDirectoryPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/achievements" element={
+                  <ProtectedRoute>
+                    <AchievementsPage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/profile" element={
+                  <ProtectedRoute>
+                    <ProfilePage />
+                  </ProtectedRoute>
+                } />
+                <Route path="/settings" element={
+                  <ProtectedRoute>
+                    <SettingsPage />
                   </ProtectedRoute>
                 } />
                 <Route path="/roadmap" element={

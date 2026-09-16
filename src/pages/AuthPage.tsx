@@ -8,9 +8,11 @@ import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Eye, EyeOff, LogIn, UserPlus, Compass, ArrowLeft, CheckCircle2, AlertCircle, ShieldCheck } from 'lucide-react';
+import { Eye, EyeOff, LogIn, UserPlus, Compass, ArrowLeft, CheckCircle2, AlertCircle, ShieldCheck, GraduationCap, Clock, RefreshCw, ShieldAlert, KeyRound, Check } from 'lucide-react';
 import { LanguageToggle } from '@/components/LanguageToggle';
 import { Badge } from '@/components/ui/badge';
+import { TrainerApplicationModal } from '@/components/TrainerApplicationModal';
+import { capacityStore } from '@/services/capacityStore';
 
 const AuthPage = () => {
   const { signIn, signUp, loginAsGuest, setRole, loading } = useAuth();
@@ -25,10 +27,129 @@ const AuthPage = () => {
 
   const [selectedRole, setSelectedRole] = useState<'trainee' | 'trainer' | 'admin'>(initialRole);
   const [activeTab, setActiveTab] = useState<'login' | 'signup'>(initialTab);
+  const [trainerApplyModalOpen, setTrainerApplyModalOpen] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+
+  // Trainer Approval Verification State
+  const [trainerApplicant, setTrainerApplicant] = useState<{
+    name?: string;
+    email?: string;
+    username?: string;
+    status: 'none' | 'pending' | 'approved' | 'rejected';
+  }>(() => {
+    try {
+      const saved = localStorage.getItem('pathfinders_trainer_applicant');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return { status: 'none' };
+  });
+
+  const [trainerApproved, setTrainerApproved] = useState<boolean>(false);
+  const [trainerLookupInput, setTrainerLookupInput] = useState('');
+  const [trainerStatusMsg, setTrainerStatusMsg] = useState<string | null>(null);
+
+  // Synchronize trainer approval status
+  useEffect(() => {
+    const checkStatus = () => {
+      try {
+        const saved = localStorage.getItem('pathfinders_trainer_applicant');
+        if (saved) {
+          const parsed = JSON.parse(saved);
+          const apps = capacityStore.getTrainerApplications();
+          const match = apps.find(a => 
+            (parsed.email && a.email.toLowerCase() === parsed.email.toLowerCase()) ||
+            (parsed.username && a.username.toLowerCase() === parsed.username.toLowerCase())
+          );
+          if (match) {
+            setTrainerApplicant({
+              name: match.name,
+              email: match.email,
+              username: match.username,
+              status: match.status
+            });
+            if (match.status === 'approved') {
+              setTrainerApproved(true);
+              setLoginData(prev => ({ ...prev, email: match.username || match.email }));
+            }
+          } else {
+            setTrainerApplicant(parsed);
+          }
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    };
+
+    checkStatus();
+    window.addEventListener('pathfinders_trainer_apps_changed', checkStatus);
+    return () => window.removeEventListener('pathfinders_trainer_apps_changed', checkStatus);
+  }, []);
+
+  const handleCheckTrainerApproval = () => {
+    const apps = capacityStore.getTrainerApplications();
+    const match = apps.find(a => 
+      (trainerApplicant.email && a.email.toLowerCase() === trainerApplicant.email.toLowerCase()) ||
+      (trainerApplicant.username && a.username.toLowerCase() === trainerApplicant.username.toLowerCase())
+    );
+    if (match && match.status === 'approved') {
+      setTrainerApproved(true);
+      setTrainerApplicant(prev => ({ ...prev, status: 'approved' }));
+      setLoginData(prev => ({ ...prev, email: match.username || match.email }));
+      setSuccess('Application approved by Administrator! Enter your credentials to sign in.');
+    } else {
+      setTrainerStatusMsg('Your request is processing. Please wait for the Administrator to review and approve.');
+    }
+  };
+
+  const handleLookupTrainerStatus = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!trainerLookupInput.trim()) return;
+    const q = trainerLookupInput.trim().toLowerCase();
+    
+    // Check applications
+    const apps = capacityStore.getTrainerApplications();
+    const match = apps.find(a => a.email.toLowerCase() === q || a.username.toLowerCase() === q);
+    if (match) {
+      if (match.status === 'approved') {
+        setTrainerApproved(true);
+        setTrainerApplicant({ name: match.name, email: match.email, username: match.username, status: 'approved' });
+        setLoginData(prev => ({ ...prev, email: match.username || match.email }));
+        setSuccess('Application approved! Please sign in with your credentials.');
+        setTrainerStatusMsg(null);
+        return;
+      } else if (match.status === 'pending') {
+        setTrainerApplicant({ name: match.name, email: match.email, username: match.username, status: 'pending' });
+        setTrainerApproved(false);
+        setTrainerStatusMsg('Your request is processing. Awaiting administrator review.');
+        return;
+      } else {
+        setTrainerStatusMsg('Your trainer application was declined by the administrator.');
+        return;
+      }
+    }
+
+    // Check seed trainers
+    const trainers = capacityStore.getTrainers();
+    const seed = trainers.find(t => t.email.toLowerCase() === q || t.userId.toLowerCase().includes(q) || t.name.toLowerCase().includes(q));
+    if (seed) {
+      setTrainerApproved(true);
+      setLoginData(prev => ({ ...prev, email: seed.email }));
+      setSuccess(`Welcome Trainer ${seed.name}! Please enter your password to sign in.`);
+      setTrainerStatusMsg(null);
+      return;
+    }
+
+    setTrainerStatusMsg('No trainer application found for this username/email. Please apply above.');
+  };
+
+  const handleUnlockForSeedTrainer = () => {
+    setTrainerApproved(true);
+    setLoginData(prev => ({ ...prev, email: 'rakesh.sharma@pathfinders.edu' }));
+    setSuccess('Trainer sign-in unlocked for verified trainer account.');
+  };
 
   // Sync selectedRole and activeTab when searchParams change
   useEffect(() => {
@@ -49,7 +170,7 @@ const AuthPage = () => {
 
   // Form data
   const [loginData, setLoginData] = useState({
-    email: initialRole === 'trainer' ? 'trainer@capacityconnect.org' : initialRole === 'admin' ? 'admin@capacityconnect.org' : 'trainee@capacityconnect.org',
+    email: initialRole === 'trainer' ? 'trainer@pathfinders.org' : initialRole === 'admin' ? 'admin@pathfinders.org' : 'trainee@pathfinders.org',
     password: ''
   });
 
@@ -79,6 +200,21 @@ const AuthPage = () => {
     }
 
     try {
+      // If Trainer: verify via capacityStore approval system
+      if (selectedRole === 'trainer') {
+        const verification = capacityStore.verifyTrainerLogin(loginData.email, loginData.password);
+        if (!verification.success) {
+          setError(verification.error || 'Trainer credentials invalid or pending admin approval.');
+          setIsLoading(false);
+          return;
+        }
+        setRole('trainer');
+        loginAsGuest('trainer');
+        navigate('/trainer', { replace: true });
+        setIsLoading(false);
+        return;
+      }
+
       // 1. Set the role explicitly in AuthContext and capacityStore
       setRole(selectedRole);
       // Call Supabase signIn
@@ -93,9 +229,7 @@ const AuthPage = () => {
       }
 
       // 2. Strict redirection ensuring Trainer always lands on /trainer
-      if (selectedRole === 'trainer') {
-        navigate('/trainer', { replace: true });
-      } else if (selectedRole === 'admin') {
+      if (selectedRole === 'admin') {
         navigate('/admin', { replace: true });
       } else {
         navigate('/main', { replace: true });
@@ -301,6 +435,25 @@ const AuthPage = () => {
                       Platform governance access is restricted. Pre-authorized admin credentials only. Sign up is unavailable.
                     </p>
                   </div>
+                ) : selectedRole === 'trainer' ? (
+                  <div className="p-5 mb-5 rounded-2xl bg-gradient-to-b from-emerald-50 via-teal-50/60 to-emerald-50/40 dark:from-emerald-950/50 dark:via-teal-950/30 dark:to-emerald-950/20 border-2 border-emerald-300 dark:border-emerald-800 text-center space-y-4 shadow-sm">
+                    <div className="flex items-center justify-center gap-2 text-xs font-extrabold text-emerald-900 dark:text-emerald-200">
+                      <GraduationCap className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                      <span className="text-sm">Accredited Trainer Portal (Approval Required)</span>
+                    </div>
+                    <p className="text-xs text-emerald-800 dark:text-emerald-300 leading-relaxed max-w-sm mx-auto">
+                      Trainers must submit an accreditation request and receive Administrator approval before signing in.
+                    </p>
+                    <Button
+                      type="button"
+                      size="lg"
+                      onClick={() => setTrainerApplyModalOpen(true)}
+                      className="w-full bg-gradient-to-r from-emerald-600 via-teal-600 to-emerald-600 hover:from-emerald-700 hover:to-teal-700 text-white font-extrabold text-base py-4 h-auto rounded-xl shadow-md hover:shadow-lg transition-all transform active:scale-[0.99] flex items-center justify-center gap-2.5 border border-emerald-400/40"
+                    >
+                      <UserPlus className="w-5 h-5" />
+                      <span>Apply to Become a Trainer</span>
+                    </Button>
+                  </div>
                 ) : (
                   <TabsList className="grid w-full grid-cols-2 p-1 bg-slate-100 dark:bg-slate-800 rounded-xl mb-6">
                     <TabsTrigger value="login" className="rounded-lg text-xs font-semibold py-2">
@@ -314,57 +467,176 @@ const AuthPage = () => {
                   </TabsList>
                 )}
 
-                {/* Login Form */}
+                {/* Login Form / Pending Processing View */}
                 <TabsContent value="login" className="space-y-4 m-0">
-                  <form onSubmit={handleLogin} className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label htmlFor="login-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        {t('auth.email', 'Email Address')}
-                      </Label>
-                      <Input
-                        id="login-email"
-                        type="email"
-                        placeholder="you@example.com"
-                        value={loginData.email}
-                        onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
-                        className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600"
-                        required
-                      />
-                    </div>
+                  {selectedRole === 'trainer' && !trainerApproved ? (
+                    trainerApplicant.status === 'pending' ? (
+                      /* Processing State Card when Application is Pending */
+                      <div className="p-5 rounded-2xl bg-amber-500/10 border-2 border-amber-400/50 dark:border-amber-700/60 text-center space-y-3.5 animate-in fade-in duration-200">
+                        <div className="w-12 h-12 rounded-2xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto shadow-xs">
+                          <Clock className="w-6 h-6 animate-pulse" />
+                        </div>
+                        
+                        <div className="space-y-1">
+                          <h4 className="text-base font-extrabold text-amber-900 dark:text-amber-200">
+                            Your Request is Processing
+                          </h4>
+                          <p className="text-xs text-amber-800 dark:text-amber-300 leading-relaxed max-w-xs mx-auto">
+                            Your trainer accreditation request has been submitted and is currently under review by the platform administrator.
+                          </p>
+                        </div>
 
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <Label htmlFor="login-password" className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                          {t('auth.password', 'Password')}
-                        </Label>
+                        <div className="bg-white/80 dark:bg-slate-900/80 p-3 rounded-xl border border-amber-200 dark:border-amber-900/70 text-xs text-left space-y-1.5">
+                          <div className="flex justify-between text-slate-500">
+                            <span>Status:</span>
+                            <span className="font-bold text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+                              <span className="w-2 h-2 rounded-full bg-amber-500 animate-pulse" />
+                              Awaiting Admin Approval
+                            </span>
+                          </div>
+                          {trainerApplicant.email && (
+                            <div className="flex justify-between text-slate-500">
+                              <span>Applicant:</span>
+                              <span className="font-semibold text-slate-800 dark:text-slate-200">{trainerApplicant.name || trainerApplicant.email}</span>
+                            </div>
+                          )}
+                        </div>
+
+                        <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                          Username and password login fields will unlock automatically once approved by the administrator.
+                        </p>
+
+                        <div className="pt-1 flex flex-col gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={handleCheckTrainerApproval}
+                            className="w-full text-xs font-semibold rounded-xl border-amber-300 text-amber-900 hover:bg-amber-100 dark:border-amber-700 dark:text-amber-200 h-9"
+                          >
+                            <RefreshCw className="w-3.5 h-3.5 mr-1.5" />
+                            Check Approval Status Now
+                          </Button>
+
+                          <button
+                            type="button"
+                            onClick={handleUnlockForSeedTrainer}
+                            className="text-[11px] text-slate-500 hover:text-slate-800 dark:hover:text-slate-200 underline"
+                          >
+                            Approved Admin/Seed Trainer? Unlock Credentials
+                          </button>
+                        </div>
                       </div>
-                      <div className="relative">
+                    ) : (
+                      /* Informational Restricted Card with Status Check */
+                      <div className="p-5 rounded-2xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-center space-y-3.5">
+                        <div className="w-10 h-10 rounded-xl bg-amber-50 dark:bg-amber-950/50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200 dark:border-amber-800">
+                          <ShieldAlert className="w-5 h-5" />
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">
+                            Sign-In Locked Until Admin Approval
+                          </h4>
+                          <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                            Username and password inputs will only be shown after an administrator approves your request. Already submitted an application?
+                          </p>
+                        </div>
+
+                        <form onSubmit={handleLookupTrainerStatus} className="space-y-2 pt-2 border-t border-slate-200/80 dark:border-slate-800">
+                          <div className="flex gap-2">
+                            <Input
+                              placeholder="Enter username or email to check"
+                              value={trainerLookupInput}
+                              onChange={(e) => {
+                                setTrainerLookupInput(e.target.value);
+                                setTrainerStatusMsg(null);
+                              }}
+                              className="h-9 text-xs rounded-xl"
+                            />
+                            <Button
+                              type="submit"
+                              size="sm"
+                              className="h-9 px-3 text-xs bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl shrink-0"
+                            >
+                              Check Status
+                            </Button>
+                          </div>
+                          {trainerStatusMsg && (
+                            <p className="text-[11px] text-amber-600 dark:text-amber-400 font-semibold">{trainerStatusMsg}</p>
+                          )}
+                        </form>
+
+                        <div className="pt-1">
+                          <button
+                            type="button"
+                            onClick={handleUnlockForSeedTrainer}
+                            className="text-xs text-emerald-600 hover:text-emerald-700 font-semibold hover:underline"
+                          >
+                            Existing Approved Trainer? Unlock Sign In
+                          </button>
+                        </div>
+                      </div>
+                    )
+                  ) : (
+                    /* Active Login Form (Shown when Approved or for Trainee/Admin) */
+                    <form onSubmit={handleLogin} className="space-y-4">
+                      {selectedRole === 'trainer' && trainerApproved && (
+                        <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 dark:bg-emerald-950/40 dark:border-emerald-800 dark:text-emerald-300 text-xs flex items-center gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                          <span><strong>Approved Trainer:</strong> Credentials unlocked. Enter password to sign in.</span>
+                        </div>
+                      )}
+
+                      <div className="space-y-1.5">
+                        <Label htmlFor="login-email" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          {selectedRole === 'trainer' ? 'Trainer Username or Email' : t('auth.email', 'Email Address')}
+                        </Label>
                         <Input
-                          id="login-password"
-                          type={showPassword ? 'text' : 'password'}
-                          placeholder="••••••••"
-                          value={loginData.password}
-                          onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
-                          className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600 pr-10"
+                          id="login-email"
+                          type="text"
+                          placeholder={selectedRole === 'trainer' ? 'e.g. rakesh.sharma or priya.narayanan' : 'you@example.com'}
+                          value={loginData.email}
+                          onChange={(e) => setLoginData(prev => ({ ...prev, email: e.target.value }))}
+                          className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600"
                           required
                         />
-                        <button
-                          type="button"
-                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
-                          onClick={() => setShowPassword(!showPassword)}
-                        >
-                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                        </button>
                       </div>
-                    </div>
 
-                    <Button 
-                      type="submit" 
-                      className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-10 rounded-xl shadow-xs transition-all" 
-                      disabled={isLoading}
-                    >
-                      {isLoading ? (t('common.loading', 'Signing in...')) : (t('auth.loginButton', 'Sign In'))}
-                    </Button>
+                      <div className="space-y-1.5">
+                        <div className="flex items-center justify-between">
+                          <Label htmlFor="login-password" className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                            {t('auth.password', 'Password')}
+                          </Label>
+                        </div>
+                        <div className="relative">
+                          <Input
+                            id="login-password"
+                            type={showPassword ? 'text' : 'password'}
+                            placeholder="••••••••"
+                            value={loginData.password}
+                            onChange={(e) => setLoginData(prev => ({ ...prev, password: e.target.value }))}
+                            className="h-10 rounded-xl text-sm border-slate-200 focus-visible:ring-blue-600 pr-10"
+                            required
+                          />
+                          <button
+                            type="button"
+                            className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                            onClick={() => setShowPassword(!showPassword)}
+                          >
+                            {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                          </button>
+                        </div>
+                      </div>
+
+                      <Button 
+                        type="submit" 
+                        className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold h-10 rounded-xl shadow-xs transition-all" 
+                        disabled={isLoading}
+                      >
+                        {isLoading ? (t('common.loading', 'Signing in...')) : (t('auth.loginButton', 'Sign In'))}
+                      </Button>
+                    </form>
+                  )}
 
                     <div className="relative my-3">
                       <div className="absolute inset-0 flex items-center">
@@ -415,7 +687,6 @@ const AuthPage = () => {
                         🛡️ Admin
                       </Button>
                     </div>
-                  </form>
                 </TabsContent>
 
                 {/* Sign Up Form */}
@@ -424,23 +695,23 @@ const AuthPage = () => {
                     {/* Role Selection */}
                     <div className="space-y-1.5">
                       <Label className="text-xs font-medium text-slate-700 dark:text-slate-300">
-                        Join Capacity Connect as:
+                        Join Pathfinders as:
                       </Label>
                       <div className="grid grid-cols-2 gap-2">
-                        {(['trainee', 'trainer'] as const).map(roleOption => (
-                          <button
-                            type="button"
-                            key={roleOption}
-                            onClick={() => setSignupData(prev => ({ ...prev, role: roleOption }))}
-                            className={`py-2 px-2.5 rounded-xl text-xs font-semibold capitalize border transition-all ${
-                              signupData.role === roleOption
-                                ? 'bg-blue-50 border-blue-600 text-blue-700 dark:bg-blue-950/60 dark:border-blue-400 dark:text-blue-300 shadow-2xs'
-                                : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50'
-                            }`}
-                          >
-                            {roleOption === 'trainee' ? '🎓 Trainee / Student' : '👨‍🏫 Certified Trainer'}
-                          </button>
-                        ))}
+                        <button
+                          type="button"
+                          onClick={() => setSignupData(prev => ({ ...prev, role: 'trainee' }))}
+                          className="py-2 px-2.5 rounded-xl text-xs font-semibold capitalize border transition-all bg-blue-50 border-blue-600 text-blue-700 dark:bg-blue-950/60 dark:border-blue-400 dark:text-blue-300 shadow-2xs"
+                        >
+                          🎓 Trainee / Student
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setTrainerApplyModalOpen(true)}
+                          className="py-2 px-2.5 rounded-xl text-xs font-semibold capitalize border transition-all bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 flex items-center justify-center gap-1"
+                        >
+                          👨‍🏫 Apply as Trainer
+                        </button>
                       </div>
                     </div>
 
@@ -532,6 +803,12 @@ const AuthPage = () => {
       <footer className="py-4 text-center text-xs text-slate-400">
         © {new Date().getFullYear()} PathFinders. All rights reserved.
       </footer>
+
+      {/* Trainer Application Modal */}
+      <TrainerApplicationModal
+        open={trainerApplyModalOpen}
+        onOpenChange={setTrainerApplyModalOpen}
+      />
     </div>
   );
 };

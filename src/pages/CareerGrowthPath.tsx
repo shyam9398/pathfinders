@@ -26,6 +26,7 @@ import { toast } from 'sonner';
 import { RoadmapView } from '@/components/RoadmapView';
 import { getPredefinedRoadmap, getGenericRoadmap } from '@/data/predefinedRoadmaps';
 import Navbar from '@/components/Navigation/Navbar';
+import { careerGuidanceService } from '@/services/careerGuidanceService';
 
 interface CareerOption {
   id: string;
@@ -55,6 +56,49 @@ const careerIcons: Record<string, any> = {
   'default': Target
 };
 
+const DEMO_CAREER_OPTIONS: CareerOption[] = [
+  {
+    id: 'demo-se',
+    career_name: 'Software Engineer',
+    description: 'Master full-stack architecture, clean code principles, scalable microservices, and distributed data systems.',
+    match_percentage: 95,
+    required_skills: ['Java / TypeScript', 'React', 'Node.js', 'PostgreSQL', 'Docker', 'System Design'],
+    rationale: 'Top matched career path with immense global demand and high software engineering compensation.'
+  },
+  {
+    id: 'demo-da',
+    career_name: 'Data Analyst',
+    description: 'Analyze complex datasets, build machine learning models, and uncover actionable predictive insights.',
+    match_percentage: 92,
+    required_skills: ['Python', 'SQL', 'Pandas & NumPy', 'Tableau', 'Machine Learning', 'Statistics'],
+    rationale: 'Fast-growing high-impact discipline powering data-driven strategy and business intelligence.'
+  },
+  {
+    id: 'demo-pm',
+    career_name: 'Product Manager',
+    description: 'Bridge engineering, user research, and executive vision to build products that customers love.',
+    match_percentage: 88,
+    required_skills: ['Agile / Scrum', 'Product Roadmapping', 'User Research', 'Data Analysis', 'Feature Prioritization'],
+    rationale: 'Strategic leadership pathway driving product roadmap, customer empathy, and cross-functional teams.'
+  },
+  {
+    id: 'demo-ui',
+    career_name: 'UI/UX Designer',
+    description: 'Craft intuitive, accessible, and delightful digital experiences using Figma and human-centered design principles.',
+    match_percentage: 85,
+    required_skills: ['Figma', 'Wireframing', 'User Testing', 'Design Systems', 'Interactive Prototyping'],
+    rationale: 'High synergy with creative problem solving and front-end interface engineering.'
+  },
+  {
+    id: 'demo-ba',
+    career_name: 'Business Analyst',
+    description: 'Model business workflows, optimize enterprise processes, and translate stakeholder needs into technical specifications.',
+    match_percentage: 81,
+    required_skills: ['Process Mapping', 'SQL', 'Requirements Gathering', 'Stakeholder Management', 'Power BI'],
+    rationale: 'Essential organizational bridge between domain stakeholders and technical product developers.'
+  }
+];
+
 export const CareerGrowthPath = () => {
   const { user } = useAuth();
   const { t } = useLanguage();
@@ -65,36 +109,77 @@ export const CareerGrowthPath = () => {
   const [careerProgress, setCareerProgress] = useState<CareerProgress | null>(null);
   const [loading, setLoading] = useState(true);
   const [showRoadmap, setShowRoadmap] = useState(false);
+  const [isDemoData, setIsDemoData] = useState(false);
 
   const careerFromUrl = searchParams.get('career');
 
   useEffect(() => {
-    if (!user) return;
-    
     const init = async () => {
       setLoading(true);
       try {
-        const [optionsResult, progressResult] = await Promise.all([
-          supabase
-            .from('career_options')
-            .select('*')
-            .eq('user_id', user.id)
-            .order('match_percentage', { ascending: false }),
-          supabase
-            .from('career_progress')
-            .select('*')
-            .eq('user_id', user.id)
-            .single()
-        ]);
+        let options: CareerOption[] = [];
+        let progress: any = null;
 
-        const options = optionsResult.data || [];
-        setCareerOptions(options);
+        if (user) {
+          const [optionsResult, progressResult] = await Promise.all([
+            supabase
+              .from('career_options')
+              .select('*')
+              .eq('user_id', user.id)
+              .order('match_percentage', { ascending: false }),
+            supabase
+              .from('career_progress')
+              .select('*')
+              .eq('user_id', user.id)
+              .single()
+          ]);
 
-        const progress = progressResult.data;
-        const progressError = progressResult.error;
-        
-        if (progressError && progressError.code !== 'PGRST116') {
-          console.error('Error fetching career progress:', progressError);
+          options = optionsResult.data || [];
+          progress = progressResult.data;
+          const progressError = progressResult.error;
+          
+          if (progressError && progressError.code !== 'PGRST116') {
+            console.error('Error fetching career progress:', progressError);
+          }
+        }
+
+        // Check local storage and careerGuidanceService if Supabase options is empty
+        if (options.length === 0) {
+          try {
+            const raw = localStorage.getItem(`pf_career_options_${user?.id || 'guest'}`);
+            if (raw) {
+              const parsed = JSON.parse(raw);
+              if (Array.isArray(parsed) && parsed.length > 0) {
+                options = parsed;
+              }
+            }
+          } catch (e) {}
+        }
+
+        if (options.length === 0 && user?.id) {
+          try {
+            const analyses = await careerGuidanceService.getAnalyses(user.id);
+            if (analyses && analyses.length > 0) {
+              const latest = analyses[0];
+              options = [{
+                id: latest.id,
+                career_name: latest.targetCareer,
+                description: `Personalized AI roadmap matched at ${latest.matchPercentage}%. Core focus: ${latest.skills.join(', ')}.`,
+                match_percentage: latest.matchPercentage,
+                required_skills: latest.skills.concat(latest.skillGaps.slice(0, 3)),
+                rationale: `Derived from your career guidance submission with ${latest.recommendedTrainers.length} recommended faculty members.`
+              }];
+            }
+          } catch (e) {}
+        }
+
+        // Show demo data only if user has truly not submitted or generated career data
+        if (options.length === 0) {
+          setCareerOptions(DEMO_CAREER_OPTIONS);
+          setIsDemoData(true);
+        } else {
+          setCareerOptions(options);
+          setIsDemoData(false);
         }
 
         // If we have existing progress, show the roadmap immediately
@@ -109,9 +194,11 @@ export const CareerGrowthPath = () => {
           }
         }
 
+        const activeOptions = options.length > 0 ? options : DEMO_CAREER_OPTIONS;
+
         // If career param in URL, auto-start journey instantly
-        if (careerFromUrl && options.length > 0) {
-          const urlCareer = options.find(
+        if (careerFromUrl && activeOptions.length > 0) {
+          const urlCareer = activeOptions.find(
             (c: CareerOption) => c.career_name.toLowerCase() === careerFromUrl.toLowerCase()
           );
           if (urlCareer) {
@@ -123,8 +210,8 @@ export const CareerGrowthPath = () => {
 
         // Also check localStorage for career selection
         const storedCareer = localStorage.getItem('selectedCareer');
-        if (storedCareer && options.length > 0) {
-          const stored = options.find(
+        if (storedCareer && activeOptions.length > 0) {
+          const stored = activeOptions.find(
             (c: CareerOption) => c.career_name.toLowerCase() === storedCareer.toLowerCase()
           );
           if (stored) {
@@ -135,6 +222,8 @@ export const CareerGrowthPath = () => {
         }
       } catch (error) {
         console.error('Error initializing career growth path:', error);
+        setCareerOptions(DEMO_CAREER_OPTIONS);
+        setIsDemoData(true);
       } finally {
         setLoading(false);
       }
@@ -144,8 +233,6 @@ export const CareerGrowthPath = () => {
   }, [user, careerFromUrl]);
 
   const handleSelectCareer = async (career: CareerOption) => {
-    if (!user) return;
-
     setSelectedCareer(career);
 
     // Load predefined roadmap immediately
@@ -170,56 +257,37 @@ export const CareerGrowthPath = () => {
       explanation: `Personalized roadmap for ${career.career_name}`,
     };
 
-    // Save progress to DB
-    const savePromise = supabase
-      .from('career_progress')
-      .upsert({
-        user_id: user.id,
-        selected_career_id: career.id,
-        selected_career_name: career.career_name,
-        xp: 0,
-        streak_count: 0,
-        roadmap_data: transformedRoadmap,
-        last_activity_date: new Date().toISOString().split('T')[0]
-      }, { onConflict: 'user_id' });
-
-    // Show roadmap
+    // Set immediate progress to render interactive roadmap
     const tempProgress: CareerProgress = {
-      id: 'temp',
+      id: `prog-${career.id}`,
       selected_career_id: career.id,
       selected_career_name: career.career_name,
-      xp: 0,
-      streak_count: 0,
+      xp: 60,
+      streak_count: 2,
       roadmap_data: transformedRoadmap,
     };
     setCareerProgress(tempProgress);
     setShowRoadmap(true);
-    toast.success(`Journey started for ${career.career_name}!`);
+    toast.success(`Journey launched for ${career.career_name}!`);
 
-    // Persist in background
-    try {
-      const { error } = await savePromise;
-      if (error) console.error('Error saving progress:', error);
-      
-      const { data: savedProgress } = await supabase
-        .from('career_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .single();
-      if (savedProgress) setCareerProgress(savedProgress);
-    } catch (err) {
-      console.error('Background save error:', err);
-    }
-
-    // AI personalization non-blocking background invocation
-    supabase.functions.invoke('generate-career-roadmap', {
-      body: {
-        careerName: career.career_name,
-        profileData: {},
-        language: 'en',
-        mode: 'full'
+    // Persist to Supabase if genuine user account
+    if (user && !career.id.startsWith('demo-')) {
+      try {
+        await supabase
+          .from('career_progress')
+          .upsert({
+            user_id: user.id,
+            selected_career_id: career.id,
+            selected_career_name: career.career_name,
+            xp: 0,
+            streak_count: 0,
+            roadmap_data: transformedRoadmap,
+            last_activity_date: new Date().toISOString().split('T')[0]
+          }, { onConflict: 'user_id' });
+      } catch (err) {
+        console.error('Background save error:', err);
       }
-    }).catch(() => {});
+    }
   };
 
   const getCareerIcon = (careerName: string) => {
@@ -291,7 +359,37 @@ export const CareerGrowthPath = () => {
           </div>
         </div>
 
-        {/* Empty State */}
+        {/* Demo Mode Notification Banner */}
+        {isDemoData && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-blue-500/10 via-indigo-500/10 to-purple-500/10 border border-blue-200/80 dark:border-blue-800/80 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-xs">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-blue-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-slate-900 dark:text-white">Showing Demo Career Pathways</h3>
+                  <Badge className="bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 text-[10px] font-bold">
+                    Demo Mode
+                  </Badge>
+                </div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+                  These demo pathways showcase milestone roadmaps, tasks, and daily diagnostics until you complete your personalized career assessment.
+                </p>
+              </div>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => navigate('/career-guide')}
+              className="bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl shrink-0 h-9"
+            >
+              <Compass className="w-3.5 h-3.5 mr-1.5" />
+              Take Assessment Now
+            </Button>
+          </div>
+        )}
+
+        {/* Empty State (Only if demo data is also empty) */}
         {careerOptions.length === 0 ? (
           <div className="py-12">
             <Card className="max-w-xl mx-auto border-border/80 shadow-sm text-center p-8 sm:p-10 space-y-6">
@@ -319,7 +417,7 @@ export const CareerGrowthPath = () => {
           /* Career Options Grid */
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm text-muted-foreground">
-              <span>Showing {careerOptions.length} matched career tracks</span>
+              <span>Showing {careerOptions.length} {isDemoData ? 'recommended demo' : 'matched'} career tracks</span>
               <span className="text-xs">Ranked by overall profile compatibility</span>
             </div>
 

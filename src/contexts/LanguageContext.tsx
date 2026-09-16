@@ -56,9 +56,31 @@ export const LanguageProvider: React.FC<LanguageProviderProps> = ({ children }) 
   const setLanguage = (lang: Language) => {
     setLanguageState(lang);
     if (typeof window !== 'undefined') {
+      const prevLang = localStorage.getItem(STORAGE_KEY);
       localStorage.setItem(STORAGE_KEY, lang);
+      localStorage.setItem('pf_lang_selected', 'true');
+      localStorage.setItem('pf_initial_lang_selected', 'true');
+      sessionStorage.setItem('pf_session_lang_selected', 'true');
       document.documentElement.lang = lang;
       window.dispatchEvent(new CustomEvent('languageChange', { detail: { language: lang } }));
+
+      // Optionally sync to Supabase profile in background
+      try {
+        import('@/integrations/supabase/client').then(({ supabase }) => {
+          supabase.auth.getUser().then(({ data }) => {
+            if (data?.user?.id) {
+              supabase.from('profiles').update({ language: lang }).eq('id', data.user.id);
+            }
+          }).catch(() => {});
+        }).catch(() => {});
+      } catch (e) {}
+
+      // Clean reload on language switch to completely purge any mutated text nodes
+      if (prevLang && prevLang !== lang) {
+        setTimeout(() => {
+          window.location.reload();
+        }, 80);
+      }
     }
   };
 

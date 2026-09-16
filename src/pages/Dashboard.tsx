@@ -65,7 +65,7 @@ export default function Dashboard() {
 
   if (!user) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-background flex flex-col lg:pl-60">
         <Navbar backTo="/" breadcrumbs={[{ label: 'Home', href: '/' }, { label: 'Analytics' }]} />
         <div className="flex-1 flex items-center justify-center p-4">
           <Card className="p-8 max-w-md w-full text-center border-border/80 shadow-sm space-y-4">
@@ -80,7 +80,7 @@ export default function Dashboard() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-background flex flex-col">
+      <div className="min-h-screen bg-background flex flex-col lg:pl-60">
         <Navbar backTo="/main" breadcrumbs={[{ label: 'Dashboard', href: '/main' }, { label: 'Analytics' }]} />
         <div className="flex-1 flex items-center justify-center p-6">
           <div className="text-center space-y-4 max-w-sm">
@@ -94,7 +94,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
+    <div className="min-h-screen bg-background flex flex-col lg:pl-60">
       <Navbar 
         backTo="/main"
         breadcrumbs={[

@@ -44,7 +44,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     };
     return {
       id: 'guest',
-      email: `${targetRole}@capacityconnect.org`,
+      email: `${targetRole}@pathfinders.org`,
       name: names[targetRole] || 'Trainee User',
       language: lang,
       role: targetRole
@@ -85,7 +85,6 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     setRoleState(target);
     setUser(createGuestUser(target));
     localStorage.setItem('cc_role_selected', 'true');
-    localStorage.setItem('pf_lang_selected', 'true');
   };
 
   useEffect(() => {
@@ -227,8 +226,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       if (error) throw error;
       setUser(null);
       setSession(null);
-      // Clear language selection flag to show language selector again
-      localStorage.removeItem('pf_lang_selected');
+      // Keep language preference persistent across sessions as required
+      // Do NOT clear pf_lang_selected on logout
     } catch (error: any) {
       console.error('Error in signOut:', error);
       throw new Error(error.message || 'Failed to sign out');

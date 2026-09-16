@@ -17,8 +17,10 @@ import {
   TrainerWorkshop,
   JobOpportunity,
   InternshipOpportunity,
-  StudentCohortRecord
+  StudentCohortRecord,
+  TrainerApplication
 } from '@/types/capacityConnect';
+import { supabase } from '@/integrations/supabase/client';
 
 // Initial Mock/Seed Trainers
 export const INITIAL_TRAINERS: TrainerProfile[] = [
@@ -26,7 +28,7 @@ export const INITIAL_TRAINERS: TrainerProfile[] = [
     id: 'trainer-1',
     userId: 'user-trainer-1',
     name: 'Dr. Rakesh Sharma',
-    email: 'rakesh.sharma@capacityconnect.edu',
+    email: 'rakesh.sharma@pathfinders.edu',
     qualification: 'Ph.D. in Computer Science (IIT Delhi)',
     yearsOfExperience: 9,
     specialization: 'Artificial Intelligence & Machine Learning',
@@ -49,7 +51,7 @@ export const INITIAL_TRAINERS: TrainerProfile[] = [
     id: 'trainer-2',
     userId: 'user-trainer-2',
     name: 'Priya Narayanan',
-    email: 'priya.narayanan@capacityconnect.edu',
+    email: 'priya.narayanan@pathfinders.edu',
     qualification: 'M.Tech Software Engineering (NIT Trichy)',
     yearsOfExperience: 7,
     specialization: 'Distributed Enterprise Systems & Backend Architecture',
@@ -73,7 +75,7 @@ export const INITIAL_TRAINERS: TrainerProfile[] = [
     id: 'trainer-3',
     userId: 'user-trainer-3',
     name: 'Amit Vikram Verma',
-    email: 'amit.verma@capacityconnect.edu',
+    email: 'amit.verma@pathfinders.edu',
     qualification: 'B.Tech CSE, Executive PG in Cloud Systems',
     yearsOfExperience: 8,
     specialization: 'Cloud Infrastructure & Modern Web Technologies',
@@ -426,7 +428,7 @@ export const INITIAL_ASSESSMENTS: Assessment[] = [
 export const INITIAL_ANNOUNCEMENTS: Announcement[] = [
   {
     id: 'ann-1',
-    title: 'Capacity Connect 2.0 Launch: Industry Mentorship Now Live',
+    title: 'PathFinders 2.0 Launch: Industry Mentorship Now Live',
     content: 'All trainees can now connect directly with accredited university and enterprise trainers through personalized competency matching.',
     type: 'announcement',
     audience: 'all',
@@ -606,6 +608,188 @@ class CapacityStore {
     } catch (e) {
       console.error(e);
     }
+  }
+
+  // Trainer Applications & Approval Workflow
+  public getTrainerApplications(): TrainerApplication[] {
+    try {
+      const stored = localStorage.getItem('pathfinders_trainer_applications');
+      if (stored) return JSON.parse(stored);
+    } catch {}
+
+    const seed: TrainerApplication[] = [
+      {
+        id: 'tapp-1',
+        name: 'Sunil Gavaskar Rao',
+        email: 'sunil.rao@techtrainer.in',
+        phone: '+91 98450 12345',
+        resumeName: 'Sunil_Rao_DevOps_Resume.pdf',
+        subject: 'Cloud & DevOps (AWS, Docker, K8s)',
+        experience: '6 Years',
+        username: 'sunil.cloud',
+        password: 'password123',
+        status: 'pending',
+        submittedAt: new Date(Date.now() - 3600000 * 18).toISOString(),
+        qualification: 'B.Tech CSE, AWS Certified Solutions Architect'
+      },
+      {
+        id: 'tapp-2',
+        name: 'Dr. Rakesh Sharma',
+        email: 'rakesh.sharma@pathfinders.edu',
+        phone: '+91 99887 66554',
+        resumeName: 'Dr_Rakesh_Sharma_CV.pdf',
+        subject: 'Artificial Intelligence & Machine Learning',
+        experience: '9 Years',
+        username: 'rakesh.sharma',
+        password: 'password123',
+        status: 'approved',
+        submittedAt: new Date(Date.now() - 3600000 * 48).toISOString(),
+        qualification: 'Ph.D. in Computer Science (IIT Delhi)'
+      },
+      {
+        id: 'tapp-3',
+        name: 'Priya Narayanan',
+        email: 'priya.narayanan@pathfinders.edu',
+        phone: '+91 91234 56789',
+        resumeName: 'Priya_Narayanan_CV.pdf',
+        subject: 'Distributed Enterprise Systems & Java',
+        experience: '7 Years',
+        username: 'priya.narayanan',
+        password: 'password123',
+        status: 'approved',
+        submittedAt: new Date(Date.now() - 3600000 * 72).toISOString(),
+        qualification: 'M.Tech Software Engineering (NIT Trichy)'
+      }
+    ];
+    this.saveTrainerApplications(seed);
+    return seed;
+  }
+
+  public saveTrainerApplications(apps: TrainerApplication[]) {
+    try {
+      localStorage.setItem('pathfinders_trainer_applications', JSON.stringify(apps));
+      window.dispatchEvent(new Event('pathfinders_trainer_apps_changed'));
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  public submitTrainerApplication(data: Omit<TrainerApplication, 'id' | 'status' | 'submittedAt'>): TrainerApplication {
+    const list = this.getTrainerApplications();
+    const newApp: TrainerApplication = {
+      ...data,
+      id: `tapp-${Date.now()}`,
+      status: 'pending',
+      submittedAt: new Date().toISOString()
+    };
+    const updated = [newApp, ...list];
+    this.saveTrainerApplications(updated);
+
+    // Sync to Supabase
+    try {
+      supabase.from('trainer_applications').insert([{
+        name: newApp.name,
+        email: newApp.email,
+        phone: newApp.phone,
+        subject: newApp.subject,
+        experience: newApp.experience,
+        username: newApp.username,
+        qualification: newApp.qualification,
+        status: 'pending'
+      }]).then(({ error }) => {
+        if (error) console.log('Supabase sync note:', error.message);
+      });
+    } catch (e) {
+      console.log('Supabase sync catch:', e);
+    }
+
+    return newApp;
+  }
+
+  public approveTrainerApplication(id: string): TrainerApplication | undefined {
+    const list = this.getTrainerApplications();
+    const app = list.find(a => a.id === id);
+    if (!app) return undefined;
+    app.status = 'approved';
+    this.saveTrainerApplications(list);
+
+    // Also add to active trainers list
+    const trainers = this.getTrainers();
+    const existing = trainers.find(t => t.email.toLowerCase() === app.email.toLowerCase() || t.name.toLowerCase() === app.name.toLowerCase());
+    if (!existing) {
+      const newTrainer: TrainerProfile = {
+        id: `trainer-${Date.now()}`,
+        userId: `user-${app.username || Date.now()}`,
+        name: app.name,
+        email: app.email,
+        qualification: app.qualification || `${app.experience} Technical Experience in ${app.subject}`,
+        yearsOfExperience: parseInt(app.experience) || 5,
+        specialization: app.subject,
+        bio: `Verified accredited trainer specializing in ${app.subject} with ${app.experience} of high-impact industry experience.`,
+        competencies: [
+          { name: app.subject.split(' ')[0] || 'Domain Knowledge', proficiency: 94 },
+          { name: 'Mentorship', proficiency: 92 },
+          { name: 'Hands-on Projects', proficiency: 95 }
+        ],
+        subjects: [app.subject, 'Industry Standards', 'System Architecture'],
+        certifications: ['Verified Pathfinders Master Trainer'],
+        rating: 4.9,
+        totalStudentsTaught: 0,
+        coursesCount: 1,
+        avatarUrl: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80'
+      };
+      trainers.unshift(newTrainer);
+      this.saveTrainers(trainers);
+    }
+
+    return app;
+  }
+
+  public rejectTrainerApplication(id: string): void {
+    const list = this.getTrainerApplications();
+    const updated = list.map(a => a.id === id ? { ...a, status: 'rejected' as const } : a);
+    this.saveTrainerApplications(updated);
+  }
+
+  public verifyTrainerLogin(usernameOrEmail: string, password: string): { success: boolean; status?: 'pending' | 'approved' | 'rejected' | 'not_found'; error?: string; trainer?: TrainerProfile; application?: TrainerApplication } {
+    const q = usernameOrEmail.trim().toLowerCase();
+    const apps = this.getTrainerApplications();
+    
+    // Check applications
+    const app = apps.find(a => a.username.toLowerCase() === q || a.email.toLowerCase() === q);
+    if (app) {
+      if (app.password && app.password !== password) {
+        return { success: false, error: 'Incorrect password for this trainer account.' };
+      }
+      if (app.status === 'pending') {
+        return { 
+          success: false, 
+          status: 'pending', 
+          error: 'Your trainer application is pending Admin approval. You will be able to log in once an administrator approves your application.' 
+        };
+      }
+      if (app.status === 'rejected') {
+        return { success: false, status: 'rejected', error: 'Your trainer application was rejected by the administrator.' };
+      }
+
+      // Approved!
+      const trainers = this.getTrainers();
+      const profile = trainers.find(t => t.email.toLowerCase() === app.email.toLowerCase() || t.name.toLowerCase() === app.name.toLowerCase()) || trainers[0];
+      return { success: true, status: 'approved', trainer: profile, application: app };
+    }
+
+    // Check seed trainers directly
+    const trainers = this.getTrainers();
+    const seed = trainers.find(t => t.email.toLowerCase() === q || t.name.toLowerCase().includes(q) || t.userId.toLowerCase().includes(q));
+    if (seed) {
+      return { success: true, status: 'approved', trainer: seed };
+    }
+
+    return { 
+      success: false, 
+      status: 'not_found', 
+      error: 'No trainer application found with this username or email. Please click "Apply as Trainer" to submit your application.' 
+    };
   }
 
   // Courses

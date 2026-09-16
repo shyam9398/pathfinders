@@ -1,29 +1,31 @@
 import React, { ReactNode, useState, useEffect } from 'react';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useLanguage } from '@/contexts/LanguageContext';
 import LanguageSelector from '@/components/LanguageSelector';
-import RoleSelector from '@/components/RoleSelector';
-import { UserRole } from '@/types/capacityConnect';
 
 interface AppWrapperProps {
   children: ReactNode;
 }
 
 const AppWrapper: React.FC<AppWrapperProps> = ({ children }) => {
-  const { user, loading: authLoading, setRole } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+  const { user, loading: authLoading } = useAuth();
   const { isLoading: languageLoading } = useLanguage();
-  const [showLanguageSelector, setShowLanguageSelector] = useState(false);
-  const [showRoleSelector, setShowRoleSelector] = useState(false);
-
-  useEffect(() => {
-    const languageSelected = localStorage.getItem('pf_lang_selected');
-    if (!languageSelected) {
-      setShowLanguageSelector(true);
-    }
-  }, []);
+  const [showLanguageSelector, setShowLanguageSelector] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    // Show choose language before home on initial session launch
+    const sessionLangChosen = sessionStorage.getItem('pf_session_lang_selected');
+    return !sessionLangChosen;
+  });
 
   const handleLanguageComplete = () => {
     setShowLanguageSelector(false);
+    sessionStorage.setItem('pf_session_lang_selected', 'true');
+    localStorage.setItem('pf_lang_selected', 'true');
+    // Open Home page
+    navigate('/main');
   };
 
   // Step 1: Show language selector if not selected yet

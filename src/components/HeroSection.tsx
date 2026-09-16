@@ -4,7 +4,6 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { ArrowRight, Sparkles, Target, Users, Zap, CheckCircle2 } from 'lucide-react';
-import Navbar from '@/components/Navigation/Navbar';
 import heroImage from '@/assets/hero-career-guide.jpg';
 
 interface HeroSectionProps {
@@ -16,15 +15,7 @@ export const HeroSection = ({ onStartChat }: HeroSectionProps) => {
   const { t } = useLanguage();
   
   return (
-    <div className="min-h-screen bg-slate-50/70 dark:bg-slate-950 flex flex-col lg:pl-60">
-      <Navbar 
-        breadcrumbs={[
-          { label: 'Career Guide' }
-        ]}
-      />
-
-      {/* Hero Content */}
-      <div className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
+    <div className="max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-10 sm:py-16">
         <div className="grid lg:grid-cols-12 gap-12 items-center">
           
           <div className="lg:col-span-7 space-y-6 text-center lg:text-left">
@@ -140,6 +131,5 @@ export const HeroSection = ({ onStartChat }: HeroSectionProps) => {
         </div>
 
       </div>
-    </div>
   );
 };

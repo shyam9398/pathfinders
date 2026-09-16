@@ -5,7 +5,8 @@ import { Card } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { FileText, Loader2, Upload, X } from 'lucide-react';
+import { FileText, Loader2, Upload, X, Sparkles } from 'lucide-react';
+import { Progress } from '@/components/ui/progress';
 import { supabase } from '@/integrations/supabase/client';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useAuth } from '@/contexts/AuthContext';
@@ -42,6 +43,7 @@ export const ResumeAnalyzer = ({ profileData, onAnalysisComplete }: ResumeAnalyz
   const { user } = useAuth();
   const [resumeText, setResumeText] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisProgress, setAnalysisProgress] = useState(0);
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [isProcessingFile, setIsProcessingFile] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -51,7 +53,6 @@ export const ResumeAnalyzer = ({ profileData, onAnalysisComplete }: ResumeAnalyz
     
     // Debug log
     console.log('[ResumeAnalyzer] DEBUG - Resume text length:', resumeText.trim().length, 'characters');
-    console.log('[ResumeAnalyzer] DEBUG - First 200 chars:', resumeText.trim().substring(0, 200));
     
     if (resumeText.trim().length < 50) {
       onAnalysisComplete('❌ **Error:** Resume text is too short. Please provide more content for analysis.');
@@ -59,6 +60,21 @@ export const ResumeAnalyzer = ({ profileData, onAnalysisComplete }: ResumeAnalyz
     }
     
     setIsAnalyzing(true);
+    setAnalysisProgress(15);
+    const startTime = Date.now();
+
+    const interval = setInterval(() => {
+      setAnalysisProgress(prev => {
+        if (prev >= 98) return prev;
+        const inc = prev < 40 
+          ? Math.floor(Math.random() * 5) + 3 
+          : prev < 75 
+            ? Math.floor(Math.random() * 3) + 2 
+            : Math.floor(Math.random() * 2) + 1;
+        return Math.min(98, prev + inc);
+      });
+    }, 90);
+
     try {
       // Build language-specific system prompt
       const languagePrompts: Record<string, string> = {
@@ -102,6 +118,16 @@ export const ResumeAnalyzer = ({ profileData, onAnalysisComplete }: ResumeAnalyz
         explanation = local.explanation;
       }
 
+      // Smooth progress pacing: ensure minimum elapsed time so user sees dynamic progress count up
+      const elapsed = Date.now() - startTime;
+      if (elapsed < 1400) {
+        await new Promise(r => setTimeout(r, 1400 - elapsed));
+      }
+
+      clearInterval(interval);
+      setAnalysisProgress(100);
+      await new Promise(r => setTimeout(r, 800));
+
       // Format the analysis response
       if (analysis) {
         const formattedResponse = formatAnalysisResponse(analysis, language);
@@ -110,9 +136,11 @@ export const ResumeAnalyzer = ({ profileData, onAnalysisComplete }: ResumeAnalyz
         onAnalysisComplete(explanation || '❌ No analysis received from AI.');
       }
     } catch (error) {
+      clearInterval(interval);
       console.error('Resume analysis error:', error);
       onAnalysisComplete(`❌ **Error analyzing resume:** ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
+      clearInterval(interval);
       setIsAnalyzing(false);
     }
   };
@@ -321,6 +349,33 @@ export const ResumeAnalyzer = ({ profileData, onAnalysisComplete }: ResumeAnalyz
             <p className="text-sm text-[hsl(var(--cyber-green))]">
               ✅ Resume content ready for analysis ({resumeText.length} characters)
             </p>
+          </div>
+        )}
+
+        {isAnalyzing && (
+          <div className="space-y-3 p-5 rounded-2xl bg-white dark:bg-slate-900 border border-blue-200/90 dark:border-blue-900/60 shadow-md animate-in fade-in duration-200">
+            <div className="flex items-center justify-between text-xs font-semibold">
+              <span className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                <Sparkles className="w-4 h-4 text-blue-600 animate-spin" style={{ animationDuration: '3s' }} />
+                {analysisProgress < 40 ? 'Parsing document text & syntax...' : analysisProgress < 75 ? 'Calculating ATS keywords & job alignment...' : analysisProgress < 100 ? 'Synthesizing strengths & missing skills...' : 'Analysis Complete!'}
+              </span>
+              <span className="text-sm font-bold text-blue-600 dark:text-blue-400 tabular-nums">
+                {analysisProgress}%
+              </span>
+            </div>
+            <Progress value={analysisProgress} className="h-2.5 bg-slate-100 dark:bg-slate-800 transition-all duration-300 [&>div]:bg-gradient-to-r [&>div]:from-blue-600 [&>div]:to-indigo-500" />
+            
+            <div className="grid grid-cols-3 gap-2 pt-1 text-[10px] text-center font-medium">
+              <div className={`p-1.5 rounded-lg transition-colors ${analysisProgress >= 30 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/60' : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40'}`}>
+                Text Scanned
+              </div>
+              <div className={`p-1.5 rounded-lg transition-colors ${analysisProgress >= 70 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/60' : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40'}`}>
+                ATS Scored
+              </div>
+              <div className={`p-1.5 rounded-lg transition-colors ${analysisProgress >= 100 ? 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300 border border-blue-200/60' : 'bg-slate-50 text-slate-400 dark:bg-slate-800/40'}`}>
+                Report Ready
+              </div>
+            </div>
           </div>
         )}
         

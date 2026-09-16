@@ -40,6 +40,21 @@ export interface TrainerProfile {
   avatarUrl?: string;
 }
 
+export interface TrainerApplication {
+  id: string;
+  name: string;
+  email: string;
+  phone: string;
+  resumeName?: string;
+  subject: string;
+  experience: string;
+  username: string;
+  password?: string;
+  status: 'pending' | 'approved' | 'rejected';
+  submittedAt: string;
+  qualification?: string;
+}
+
 export interface CompetencyItem {
   id: string;
   name: string;
